@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CS2 Draft — комнаты</title>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <title>CS2 Draft — WebSocket</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Стили (без изменений) ===== */
+        /* ===== Стили (полностью рабочие) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -23,12 +21,12 @@
         .app {
             max-width: 1100px;
             width: 100%;
-            background: rgba(18, 22, 30, 0.92);
+            background: rgba(18,22,30,0.92);
             backdrop-filter: blur(12px);
             border-radius: 32px;
             padding: 32px 36px 40px;
-            border: 1px solid rgba(255, 180, 50, 0.12);
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255,180,50,0.12);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
         }
         .title {
             font-family: 'Orbitron', monospace;
@@ -42,13 +40,13 @@
         .subtitle { color: #8a92a8; font-size: 13px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
         .phase-badge {
             display: inline-block;
-            background: rgba(247, 201, 72, 0.12);
+            background: rgba(247,201,72,0.12);
             color: #f7c948;
             padding: 6px 18px;
             border-radius: 40px;
             font-size: 13px;
             font-weight: 600;
-            border: 1px solid rgba(247, 201, 72, 0.15);
+            border: 1px solid rgba(247,201,72,0.15);
         }
         .header {
             display: flex;
@@ -58,15 +56,10 @@
             gap: 16px;
             margin-bottom: 28px;
             padding-bottom: 18px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .header-left { display: flex; flex-direction: column; gap: 4px; }
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
+        .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
         .btn {
             background: linear-gradient(135deg, #f7c948, #e8a020);
             border: none;
@@ -78,14 +71,14 @@
             cursor: pointer;
             transition: all 0.25s;
             font-family: 'Inter', sans-serif;
-            box-shadow: 0 4px 20px rgba(247, 201, 72, 0.2);
+            box-shadow: 0 4px 20px rgba(247,201,72,0.2);
             white-space: nowrap;
         }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(247, 201, 72, 0.35); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(247,201,72,0.35); }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
             color: #8a92a8;
             font-weight: 500;
             font-size: 13px;
@@ -95,18 +88,18 @@
             transition: all 0.2s;
             font-family: 'Inter', sans-serif;
         }
-        .btn-secondary:hover { background: rgba(255, 255, 255, 0.1); color: #e8ecf5; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); color: #e8ecf5; }
         .status-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 12px;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0,0,0,0.3);
             border-radius: 16px;
             padding: 14px 22px;
             margin-bottom: 28px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255,255,255,0.04);
         }
         .status-left {
             display: flex;
@@ -128,10 +121,10 @@
             font-size: 13px;
             font-weight: 700;
         }
-        .team-indicator.a { background: rgba(255, 107, 107, 0.18); color: #ff6b6b; }
-        .team-indicator.b { background: rgba(78, 205, 196, 0.18); color: #4ecdc4; }
+        .team-indicator.a { background: rgba(255,107,107,0.18); color: #ff6b6b; }
+        .team-indicator.b { background: rgba(78,205,196,0.18); color: #4ecdc4; }
         .status-action { color: #aab2c8; font-size: 14px; font-weight: 500; }
-        .fb-status {
+        .ws-status {
             background: rgba(255,255,255,0.03);
             border-radius: 20px;
             padding: 8px 20px;
@@ -142,11 +135,12 @@
             gap: 16px;
             flex-wrap: wrap;
         }
-        .fb-status .label { color: #8a92a8; font-size: 13px; font-weight: 500; }
-        .fb-status .status { font-size: 14px; font-weight: 600; }
-        .fb-status .status.connected { color: #4ecdc4; }
-        .fb-status .status.disconnected { color: #ff6b6b; }
-        .fb-status .status.connecting { color: #f7c948; }
+        .ws-status .label { color: #8a92a8; font-size: 13px; font-weight: 500; }
+        .ws-status .status { font-size: 14px; font-weight: 600; }
+        .ws-status .status.connected { color: #4ecdc4; }
+        .ws-status .status.disconnected { color: #ff6b6b; }
+        .ws-status .status.connecting { color: #f7c948; }
+        .ws-status .error-msg { color: #ff6b6b; font-size: 13px; }
         .map-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -154,19 +148,19 @@
             margin-bottom: 24px;
         }
         .map-card {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255,255,255,0.03);
             border-radius: 16px;
             padding: 16px 10px 14px;
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.05);
             cursor: pointer;
             transition: all 0.25s;
             position: relative;
             user-select: none;
         }
         .map-card:hover:not(.banned):not(.picked):not(.disabled) {
-            border-color: rgba(247, 201, 72, 0.25);
-            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(247,201,72,0.25);
+            background: rgba(255,255,255,0.06);
             transform: translateY(-3px);
         }
         .map-card .map-icon { font-size: 34px; display: block; margin-bottom: 6px; }
@@ -213,10 +207,7 @@
             display: none;
         }
         .results.visible { display: block; animation: fadeSlide 0.5s ease; }
-        @keyframes fadeSlide {
-            0% { opacity: 0; transform: translateY(12px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeSlide { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
         .results .result-title { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 20px; color: #f7c948; margin-bottom: 12px; }
         .results .result-grid { display: flex; flex-wrap: wrap; gap: 20px 40px; }
         .results .result-item { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #e8ecf5; font-weight: 500; }
@@ -311,7 +302,7 @@
     <div class="header">
         <div class="header-left">
             <span class="title">⚔️ CS2 DRAFT</span>
-            <span class="subtitle">BO3 · Комнаты</span>
+            <span class="subtitle">BO3 · WebSocket</span>
         </div>
         <div class="header-right">
             <button class="btn-secondary" id="btnLeave" style="display:none;">🚪 Выйти</button>
@@ -329,13 +320,14 @@
         <div id="roomError" class="error"></div>
     </div>
 
-    <!-- Контейнер для драфта (скрыт, пока не вошли в комнату) -->
+    <!-- Контейнер для драфта -->
     <div id="draftContainer" style="display:none;">
-        <!-- Статус Firebase -->
-        <div class="fb-status">
-            <span class="label">🔗 Firebase:</span>
-            <span class="status" id="fbStatus">Подключение...</span>
+        <!-- Статус WebSocket -->
+        <div class="ws-status">
+            <span class="label">🔗 Соединение:</span>
+            <span class="status" id="wsStatus">Подключение...</span>
             <span id="roomInfo" style="color:#8a92a8;font-size:13px;"></span>
+            <span id="wsError" class="error-msg"></span>
         </div>
 
         <!-- STATUS BAR -->
@@ -371,23 +363,16 @@
 
 <script>
     // ============================================================
-    // 🔥 КОНФИГУРАЦИЯ FIREBASE (ваша)
-    const firebaseConfig = {
-        apiKey: "AIzaSyDeyrzmA7qQIhGQYeL51WAlgiKQsXE0c1c",
-        authDomain: "draft-cs22.firebaseapp.com",
-        databaseURL: "https://draft-cs22-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "draft-cs22",
-        storageBucket: "draft-cs22.firebasestorage.app",
-        messagingSenderId: "421775366894",
-        appId: "1:421775366894:web:a68c37c075540676cd31ff",
-        measurementId: "G-7RDLE4P9XS"
-    };
+    // 🔥 АДРЕС ВАШЕГО ВЕБСОКЕТ-СЕРВЕРА (VPS Timeweb)
+    const WS_URL = 'ws://147.45.234.224:3000';   // <--- ВАШ IP И ПОРТ
     // ============================================================
 
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    let ws = null;
+    let currentRoom = null;
+    let myTeam = null; // 'A' или 'B'
+    let isConnected = false;
+    let startBtn = null;
 
-    // ============================================================
     // DOM refs
     const roomSelector = document.getElementById('roomSelector');
     const draftContainer = document.getElementById('draftContainer');
@@ -395,236 +380,10 @@
     const btnJoinRoom = document.getElementById('btnJoinRoom');
     const roomError = document.getElementById('roomError');
     const btnLeave = document.getElementById('btnLeave');
-    const fbStatus = document.getElementById('fbStatus');
+    const wsStatus = document.getElementById('wsStatus');
     const roomInfo = document.getElementById('roomInfo');
-
-    // ============================================================
-    // Переменные состояния
-    let currentRoom = null;
-    let myTeam = null; // 'A' или 'B'
-    let roomRef = null;
-    let isConnected = false;
-    let unsubscribe = null; // функция отписки
-
-    // ============================================================
-    // Обработчик входа в комнату
-    btnJoinRoom.addEventListener('click', joinRoom);
-    roomInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') joinRoom();
-    });
-
-    function joinRoom() {
-        const roomId = roomInput.value.trim();
-        if (!roomId) {
-            roomError.textContent = 'Введите номер комнаты';
-            return;
-        }
-        roomError.textContent = '';
-        // Проверяем, есть ли уже два игрока в комнате
-        const playersRef = database.ref('rooms/' + roomId + '/players');
-        playersRef.once('value', (snapshot) => {
-            const players = snapshot.val();
-            if (players) {
-                const count = Object.keys(players).length;
-                if (count >= 2) {
-                    roomError.textContent = 'Комната заполнена (2 игрока уже есть)';
-                    return;
-                }
-            }
-            // Входим
-            enterRoom(roomId);
-        });
-    }
-
-    function enterRoom(roomId) {
-        currentRoom = roomId;
-        roomSelector.style.display = 'none';
-        draftContainer.style.display = 'block';
-        btnLeave.style.display = 'inline-block';
-        roomInfo.textContent = `Комната: ${roomId}`;
-
-        // Регистрируем игрока
-        const playerKey = database.ref('rooms/' + roomId + '/players').push().key;
-        localStorage.setItem('cs2_room_' + roomId, playerKey);
-
-        // Определяем команду: первый — A, второй — B
-        const playersRef = database.ref('rooms/' + roomId + '/players');
-        playersRef.once('value', (snap) => {
-            const players = snap.val();
-            const keys = Object.keys(players || {});
-            const index = keys.indexOf(playerKey);
-            if (index === -1) {
-                alert('Ошибка регистрации');
-                return;
-            }
-            myTeam = (index === 0) ? 'A' : 'B';
-
-            // Сохраняем команду
-            database.ref('rooms/' + roomId + '/players/' + playerKey).set({
-                team: myTeam,
-                joined: Date.now()
-            });
-
-            // Инициализируем драфт
-            initDraft(roomId);
-        });
-    }
-
-    // ============================================================
-    // Инициализация драфта
-    function initDraft(roomId) {
-        // Создаём ссылку на данные драфта
-        roomRef = database.ref('rooms/' + roomId + '/draft');
-
-        // Сначала проверяем, есть ли уже данные, если нет — создаём
-        roomRef.once('value', (snapshot) => {
-            if (!snapshot.exists()) {
-                // Создаём начальное состояние
-                const initialState = {
-                    teamA: 'Team A',
-                    teamB: 'Team B',
-                    startingTeam: null,
-                    currentTurn: null,
-                    phase: 'setup',
-                    maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
-                    picked: [],
-                    banned: [],
-                    history: [],
-                    banOrder: 0,
-                    pickOrder: 0,
-                    isLocked: false,
-                    sidePickMapId: null,
-                    sidePickWinner: null,
-                    sidePickChoice: null,
-                };
-                roomRef.set(initialState).then(() => {
-                    console.log('Данные драфта созданы');
-                }).catch(err => {
-                    console.error('Ошибка создания данных:', err);
-                });
-            }
-        });
-
-        // Подписываемся на изменения
-        if (unsubscribe) unsubscribe();
-        unsubscribe = roomRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                fbStatus.textContent = 'Данные не найдены...';
-                fbStatus.className = 'status connecting';
-                return;
-            }
-            // Применяем данные
-            applyRemoteState(data);
-            fbStatus.textContent = 'Синхронизировано';
-            fbStatus.className = 'status connected';
-            isConnected = true;
-            if (window.startBtn) {
-                window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
-            }
-            renderAll();
-        }, (error) => {
-            console.error('Ошибка подписки:', error);
-            fbStatus.textContent = 'Ошибка подключения';
-            fbStatus.className = 'status disconnected';
-            isConnected = false;
-            if (window.startBtn) window.startBtn.disabled = true;
-        });
-
-        // Добавляем кнопку "Начать драфт" в статус-бар (если её нет)
-        const statusBar = document.querySelector('.status-bar');
-        let startBtn = document.getElementById('btnStartDraft');
-        if (!startBtn) {
-            startBtn = document.createElement('button');
-            startBtn.className = 'btn';
-            startBtn.textContent = '▶ Начать драфт';
-            startBtn.id = 'btnStartDraft';
-            startBtn.style.marginLeft = 'auto';
-            statusBar.appendChild(startBtn);
-        }
-        window.startBtn = startBtn;
-        startBtn.disabled = true;
-
-        startBtn.addEventListener('click', () => {
-            if (state.phase === 'setup' && myTeam === 'A' && isConnected) {
-                startDraft();
-                startBtn.disabled = true;
-            }
-        });
-
-        // Обработчики для выбора стороны
-        document.querySelectorAll('.btn-side').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (state.phase !== 'side_pick1' && state.phase !== 'side_pick2') return;
-                if (state.sidePickChoice) return;
-                if (state.isLocked) return;
-                if (!isConnected) {
-                    alert('Нет соединения с Firebase');
-                    return;
-                }
-                const side = btn.dataset.side;
-                const team = state.sidePickWinner;
-                if (!team) return;
-                state.sidePickChoice = side;
-                state.isLocked = true;
-
-                const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
-                if (pick) pick.side = side;
-
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${getMapById(state.sidePickMapId)?.name}`);
-                sendAction({
-                    action: 'side_pick',
-                    sidePickWinner: team,
-                    sidePickChoice: side,
-                    mapId: state.sidePickMapId,
-                });
-                renderStatus();
-                setTimeout(() => { state.isLocked = false; nextPhase(); }, 400);
-            });
-        });
-
-        // Обработчик кликов по картам
-        mapGrid.addEventListener('click', (e) => {
-            const card = e.target.closest('.map-card');
-            if (!card) return;
-            const mapId = card.dataset.mapId;
-            if (!mapId) return;
-            handleMapClick(mapId);
-        });
-
-        // Инициализация рендера
-        renderAll();
-    }
-
-    // ============================================================
-    // Выход из комнаты
-    btnLeave.addEventListener('click', () => {
-        if (currentRoom) {
-            const playerKey = localStorage.getItem('cs2_room_' + currentRoom);
-            if (playerKey) {
-                database.ref('rooms/' + currentRoom + '/players/' + playerKey).remove();
-            }
-            localStorage.removeItem('cs2_room_' + currentRoom);
-        }
-        if (unsubscribe) {
-            unsubscribe();
-            unsubscribe = null;
-        }
-        if (roomRef) {
-            roomRef.off();
-        }
-        // Возврат на экран выбора комнаты
-        roomSelector.style.display = 'block';
-        draftContainer.style.display = 'none';
-        btnLeave.style.display = 'none';
-        currentRoom = null;
-        myTeam = null;
-        roomRef = null;
-        isConnected = false;
-        // Убираем кнопку старта
-        const startBtn = document.getElementById('btnStartDraft');
-        if (startBtn) startBtn.remove();
-    });
+    const wsError = document.getElementById('wsError');
+    const statusAction = document.getElementById('statusAction');
 
     // ============================================================
     // Логика драфта (та же, что и раньше)
@@ -660,7 +419,6 @@
     const mapGrid = $('mapGrid');
     const phaseBadge = $('phaseBadge');
     const turnDisplay = $('turnDisplay');
-    const statusAction = $('statusAction');
     const sidePickContainer = $('sidePickContainer');
     const sideWinner = $('sideWinner');
     const resultsDiv = $('results');
@@ -668,7 +426,7 @@
     const historyLog = $('historyLog');
 
     // ============================================================
-    // Вспомогательные функции
+    // Функции драфта
     function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
     function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
     function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
@@ -678,89 +436,29 @@
     function getPickedMap(order) { return state.picked.find(p => p.order === order); }
     function addHistory(text) { state.history.push({ text }); renderHistory(); }
 
-    function saveStateToFirebase() {
-        if (!roomRef) return;
-        const data = {
-            teamA: state.teamA,
-            teamB: state.teamB,
-            startingTeam: state.startingTeam,
-            currentTurn: state.currentTurn,
-            phase: state.phase,
-            maps: state.maps,
-            picked: state.picked,
-            banned: state.banned,
-            history: state.history,
-            banOrder: state.banOrder,
-            pickOrder: state.pickOrder,
-            isLocked: state.isLocked,
-            sidePickMapId: state.sidePickMapId,
-            sidePickWinner: state.sidePickWinner,
-            sidePickChoice: state.sidePickChoice,
-        };
-        roomRef.set(data).catch(err => console.error('Ошибка сохранения:', err));
-    }
-
-    function applyRemoteState(data) {
-        Object.assign(state, data);
+    function applyStateUpdate(newState) {
+        Object.assign(state, newState);
         renderAll();
         if (state.phase === 'complete') resultsDiv.classList.add('visible');
         else resultsDiv.classList.remove('visible');
-        if (window.startBtn) {
-            window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        if (startBtn) {
+            startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
         }
     }
 
     function sendAction(actionPayload) {
-        if (!isConnected) {
-            alert('Нет соединения с Firebase');
+        if (!isConnected || !ws || ws.readyState !== WebSocket.OPEN) {
+            wsError.textContent = 'Нет соединения с сервером';
             return;
         }
-        applyAction(actionPayload);
-        saveStateToFirebase();
-    }
-
-    function applyAction(payload) {
-        const { action, mapId, team, side, phase, pickOrder, banOrder, sidePickWinner, sidePickChoice, currentTurn, startingTeam } = payload;
-
-        if (action === 'ban') {
-            const map = getMapById(mapId);
-            if (map) map.status = 'banned';
-            state.banOrder = banOrder;
-            state.banned.push({ mapId, team, order: banOrder });
-            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
-        } else if (action === 'pick') {
-            const map = getMapById(mapId);
-            if (map) map.status = 'picked';
-            state.pickOrder = pickOrder;
-            state.picked.push({ mapId, team, order: pickOrder, side: side || null });
-            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`);
-            if (side) {
-                const pick = state.picked.find(p => p.mapId === mapId);
-                if (pick) pick.side = side;
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${map.name}`);
-            }
-        } else if (action === 'side_pick') {
-            state.sidePickWinner = sidePickWinner;
-            state.sidePickChoice = sidePickChoice;
-            const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
-            if (pick) pick.side = state.sidePickChoice;
-            addHistory(`<span class="hl-${getTeamClass(state.sidePickWinner)}">${getTeamName(state.sidePickWinner)}</span> выбрала сторону <strong>${state.sidePickChoice}</strong>`);
-        } else if (action === 'phase_change') {
-            state.phase = phase;
-            state.currentTurn = currentTurn || null;
-            state.startingTeam = startingTeam || state.startingTeam;
-            state.isLocked = false;
-            if (state.phase === 'complete') {
-                const avail = getAvailableMaps();
-                if (avail.length === 1) avail[0].status = 'remaining';
-                renderResults();
-            }
-        } else if (action === 'start_draft') {
-            startDraft();
-        } else if (action === 'reset') {
-            resetDraft();
-        }
-        renderAll();
+        // Применяем локально
+        // applyAction(actionPayload); // теперь это делается через сервер
+        // Отправляем на сервер
+        ws.send(JSON.stringify({
+            type: 'action',
+            roomId: currentRoom,
+            payload: state
+        }));
     }
 
     // ============================================================
@@ -807,6 +505,13 @@
                     card.appendChild(badge);
                 }
             }
+            card.addEventListener('click', () => {
+                if (map.status === 'available' && !state.isLocked && isConnected &&
+                    (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
+                        state.phase === 'pick1' || state.phase === 'pick2')) {
+                    handleMapClick(map.id);
+                }
+            });
             mapGrid.appendChild(card);
         });
     }
@@ -949,13 +654,13 @@
     }
 
     // ============================================================
-    // Логика драфта
+    // Обработчики кликов по картам и выбор стороны (те же)
     function handleMapClick(mapId) {
         if (state.isLocked) return;
         if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
         if (state.phase === 'side_pick1' || state.phase === 'side_pick2') return;
         if (!isConnected) {
-            alert('Нет соединения с Firebase');
+            wsError.textContent = 'Нет соединения с сервером';
             return;
         }
 
@@ -972,6 +677,7 @@
             state.banOrder++;
             state.banned.push({ mapId: map.id, team, order: state.banOrder });
             addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
+            // Отправляем действие
             sendAction({ action: 'ban', mapId: map.id, team, banOrder: state.banOrder });
             nextPhase();
             return;
@@ -1034,15 +740,8 @@
         state.isLocked = false;
 
         sendAction({ action: 'phase_change', phase: next, currentTurn: state.currentTurn, startingTeam: state.startingTeam });
-
-        if (next === 'side_pick1' || next === 'side_pick2') {
-            const team = state.sidePickWinner;
-            addHistory(`<span class="hl-gold">🎯 Выбор стороны:</span> <span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону для карты ${getMapById(state.sidePickMapId)?.name}`);
-        }
-
-        if (state.phase === 'complete') renderResults();
         renderAll();
-
+        if (state.phase === 'complete') renderResults();
         if (getAvailableMaps().length === 0 && state.phase !== 'complete') state.isLocked = true;
     }
 
@@ -1093,13 +792,178 @@
         resultsDiv.classList.remove('visible');
         sidePickContainer.classList.add('hidden');
         renderAll();
-        if (window.startBtn) {
-            window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        if (startBtn) {
+            startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
         }
         sendAction({ action: 'reset' });
     }
 
-    console.log('🔫 CS2 Draft — упрощённые комнаты');
+    // ============================================================
+    // WebSocket подключение
+    function connectWebSocket(roomId, team) {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            wsStatus.textContent = 'Соединение установлено';
+            wsStatus.className = 'status connected';
+            wsError.textContent = '';
+            isConnected = true;
+            // Отправляем запрос на присоединение к комнате
+            ws.send(JSON.stringify({
+                type: 'join',
+                roomId: roomId,
+                team: team
+            }));
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'joined') {
+                    myTeam = data.team;
+                    roomInfo.textContent = `Комната: ${roomId} | Ваша команда: ${myTeam}`;
+                    // Применяем начальное состояние, если есть
+                    if (data.state) {
+                        applyStateUpdate(data.state);
+                    }
+                    // Добавляем кнопку "Начать драфт", если мы команда А
+                    if (myTeam === 'A') {
+                        const statusBar = document.querySelector('.status-bar');
+                        if (!document.getElementById('btnStartDraft')) {
+                            const btn = document.createElement('button');
+                            btn.className = 'btn';
+                            btn.textContent = '▶ Начать драфт';
+                            btn.id = 'btnStartDraft';
+                            btn.style.marginLeft = 'auto';
+                            statusBar.appendChild(btn);
+                            startBtn = btn;
+                            btn.addEventListener('click', () => {
+                                if (state.phase === 'setup' && isConnected) {
+                                    startDraft();
+                                    btn.disabled = true;
+                                }
+                            });
+                        }
+                    }
+                } else if (data.type === 'both_connected') {
+                    // Оба игрока в комнате
+                    statusAction.textContent = 'Оба игрока подключены!';
+                    if (startBtn) startBtn.disabled = false;
+                } else if (data.type === 'state_update') {
+                    applyStateUpdate(data.payload);
+                } else if (data.type === 'player_left') {
+                    statusAction.textContent = 'Соперник покинул комнату. Ожидание...';
+                    if (startBtn) startBtn.disabled = true;
+                } else if (data.type === 'error') {
+                    wsError.textContent = data.message;
+                }
+            } catch (e) {
+                console.error('Ошибка обработки сообщения:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            wsStatus.textContent = 'Отключено';
+            wsStatus.className = 'status disconnected';
+            isConnected = false;
+            if (startBtn) startBtn.disabled = true;
+            // Попытка переподключения через 5 секунд
+            setTimeout(() => {
+                if (currentRoom && myTeam) {
+                    connectWebSocket(currentRoom, myTeam);
+                }
+            }, 5000);
+        };
+
+        ws.onerror = (err) => {
+            wsStatus.textContent = 'Ошибка соединения';
+            wsStatus.className = 'status disconnected';
+            wsError.textContent = 'Не удалось подключиться к серверу. Проверьте, что сервер запущен и порт 3000 открыт.';
+            isConnected = false;
+            if (startBtn) startBtn.disabled = true;
+            console.error('WebSocket ошибка:', err);
+        };
+    }
+
+    // ============================================================
+    // Вход в комнату
+    btnJoinRoom.addEventListener('click', joinRoom);
+    roomInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') joinRoom();
+    });
+
+    function joinRoom() {
+        const roomId = roomInput.value.trim();
+        if (!roomId) {
+            roomError.textContent = 'Введите номер комнаты';
+            return;
+        }
+        roomError.textContent = '';
+        currentRoom = roomId;
+        roomSelector.style.display = 'none';
+        draftContainer.style.display = 'block';
+        btnLeave.style.display = 'inline-block';
+        roomInfo.textContent = `Комната: ${roomId}`;
+        wsError.textContent = '';
+
+        // Подключаемся к WebSocket
+        connectWebSocket(roomId, null); // team определится на сервере
+    }
+
+    // Выход
+    btnLeave.addEventListener('click', () => {
+        if (ws) ws.close();
+        currentRoom = null;
+        myTeam = null;
+        isConnected = false;
+        roomSelector.style.display = 'block';
+        draftContainer.style.display = 'none';
+        btnLeave.style.display = 'none';
+        if (startBtn) {
+            startBtn.remove();
+            startBtn = null;
+        }
+        wsStatus.textContent = 'Отключено';
+        wsStatus.className = 'status disconnected';
+        roomInfo.textContent = '';
+        wsError.textContent = '';
+    });
+
+    // Обработчики для выбора стороны
+    document.querySelectorAll('.btn-side').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (state.phase !== 'side_pick1' && state.phase !== 'side_pick2') return;
+            if (state.sidePickChoice) return;
+            if (state.isLocked) return;
+            if (!isConnected) {
+                wsError.textContent = 'Нет соединения с сервером';
+                return;
+            }
+            const side = btn.dataset.side;
+            const team = state.sidePickWinner;
+            if (!team) return;
+            state.sidePickChoice = side;
+            state.isLocked = true;
+
+            const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
+            if (pick) pick.side = side;
+
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${getMapById(state.sidePickMapId)?.name}`);
+            sendAction({
+                action: 'side_pick',
+                sidePickWinner: team,
+                sidePickChoice: side,
+                mapId: state.sidePickMapId,
+            });
+            renderStatus();
+            setTimeout(() => { state.isLocked = false; nextPhase(); }, 400);
+        });
+    });
+
+    // ============================================================
+    // Инициализация
+    console.log('🔫 CS2 Draft — WebSocket версия (VPS Timeweb)');
+    console.log('Сервер: ' + WS_URL);
 </script>
 </body>
 </html>

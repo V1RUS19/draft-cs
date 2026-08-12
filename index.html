@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Стили (те же, что и раньше, с небольшими добавками для лобби) ===== */
+        /* ===== Стили (те же, что и в предыдущей версии) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -372,7 +372,7 @@
                     <span id="turnDisplay" style="color:#6a728a;font-weight:400;">—</span>
                 </div>
                 <div class="status-action" id="statusAction">
-                    Введите названия команд и нажмите «Начать драфт»
+                    Ожидание подключения второго игрока...
                 </div>
             </div>
             <div id="sidePickContainer" class="side-pick-widget hidden">
@@ -464,7 +464,6 @@
 
         document.getElementById('btnCreateLobby').addEventListener('click', createLobby);
         document.getElementById('btnStartDraftFromLobby')?.addEventListener('click', () => {
-            // Перенаправляем на ссылку для команды А (это и будет хост)
             const linkA = document.getElementById('linkA').value;
             if (linkA) window.location.href = linkA;
         });
@@ -473,7 +472,6 @@
     function createLobby() {
         const teamA = document.getElementById('lobbyTeamA').value.trim() || 'Team A';
         const teamB = document.getElementById('lobbyTeamB').value.trim() || 'Team B';
-        // Генерируем уникальный ID комнаты
         const room = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         const baseUrl = window.location.href.split('?')[0];
         const linkA = `${baseUrl}?room=${room}&team=A`;
@@ -483,14 +481,13 @@
         document.getElementById('linkB').value = linkB;
         document.getElementById('lobbyLinks').style.display = 'block';
 
-        // Сохраняем названия команд в Firebase, чтобы они подтянулись при подключении
+        // Сохраняем названия команд в Firebase
         database.ref('lobbies/' + room).set({
             teamA: teamA,
             teamB: teamB,
             created: Date.now()
         }).catch(err => console.error('Ошибка сохранения лобби:', err));
 
-        // Скрываем кнопку создания
         document.getElementById('btnCreateLobby').disabled = true;
         document.getElementById('btnCreateLobby').textContent = '✅ Лобби создано!';
     }
@@ -504,90 +501,21 @@
 
     // ============================================================
     // 2. ДРАФТ (при наличии room и team)
-    let myTeam = null; // 'A' или 'B'
+    let myTeam = null;
     let roomRef = null;
     let isConnected = false;
     let ignoreNextSnapshot = false;
     const fbStatus = document.getElementById('fbStatus');
     const roomInfo = document.getElementById('roomInfo');
+    const statusAction = document.getElementById('statusAction');
 
     function initDraft(room, team) {
         myTeam = team;
         roomInfo.textContent = `Комната: ${room} | Ваша команда: ${team}`;
-        // Подключаемся к узлу комнаты
         roomRef = database.ref('lobbies/' + room + '/draft');
 
-        // Загружаем состояние
-        loadDraftState();
-
-        // Если мы команда А, показываем кнопку сброса
-        if (team === 'A') {
-            document.getElementById('btnReset').style.display = 'inline-block';
-            document.getElementById('btnReset').addEventListener('click', resetDraft);
-        }
-
-        // Инициализируем интерфейс драфта
-        initDraftUI();
-    }
-
-    // ============================================================
-    // 3. Логика драфта (аналогична предыдущей, но с roomRef)
-    const MAPS_DATA = [
-        { id: 'dust2', name: 'Dust II', icon: '🏜️' },
-        { id: 'mirage', name: 'Mirage', icon: '🏗️' },
-        { id: 'inferno', name: 'Inferno', icon: '🏛️' },
-        { id: 'nuke', name: 'Nuke', icon: '🏭' },
-        { id: 'vertigo', name: 'Vertigo', icon: '🗻' },
-        { id: 'ancient', name: 'Ancient', icon: '🏺' },
-        { id: 'anubis', name: 'Anubis', icon: '🌊' },
-    ];
-
-    const state = {
-        teamA: 'Team A',
-        teamB: 'Team B',
-        startingTeam: null,
-        currentTurn: null,
-        phase: 'setup',
-        maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
-        picked: [],
-        banned: [],
-        history: [],
-        banOrder: 0,
-        pickOrder: 0,
-        isLocked: false,
-        sidePickMapId: null,
-        sidePickWinner: null,
-        sidePickChoice: null,
-    };
-
-    // DOM refs (для драфта)
-    const $ = id => document.getElementById(id);
-    const mapGrid = $('mapGrid');
-    const phaseBadge = $('phaseBadge');
-    const turnDisplay = $('turnDisplay');
-    const statusAction = $('statusAction');
-    const sidePickContainer = $('sidePickContainer');
-    const sideWinner = $('sideWinner');
-    const resultsDiv = $('results');
-    const resultGrid = $('resultGrid');
-    const historyLog = $('historyLog');
-    const btnStart = document.createElement('button'); // будем использовать существующую кнопку из лобби? Но в драфте её нет, добавим в статус-бар?
-    // Вместо этого добавим кнопку в статус-бар, но проще добавить в интерфейс.
-
-    // Добавим кнопку "Начать драфт" в статус-бар, если её нет
-    const statusBar = document.querySelector('.status-bar');
-    const startBtn = document.createElement('button');
-    startBtn.className = 'btn';
-    startBtn.textContent = '▶ Начать драфт';
-    startBtn.disabled = true;
-    startBtn.id = 'btnStartDraft';
-    startBtn.style.marginLeft = 'auto';
-    statusBar.appendChild(startBtn);
-
-    function initDraftUI() {
         // Загружаем названия команд из лобби
-        const lobbyRef = database.ref('lobbies/' + roomId);
-        lobbyRef.once('value', (snap) => {
+        database.ref('lobbies/' + room).once('value', (snap) => {
             const data = snap.val();
             if (data) {
                 state.teamA = data.teamA || 'Team A';
@@ -600,13 +528,11 @@
         roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) {
-                // Если данных нет, создаём начальное состояние (только если мы команда А)
-                if (myTeam === 'A') {
-                    ignoreNextSnapshot = true;
-                    saveStateToFirebase();
-                }
-                fbStatus.textContent = 'Ожидание данных...';
+                // Данных нет — создаём начальное состояние (любой игрок)
+                fbStatus.textContent = 'Создание данных...';
                 fbStatus.className = 'status connecting';
+                ignoreNextSnapshot = true;
+                saveStateToFirebase();
                 return;
             }
             if (ignoreNextSnapshot) {
@@ -627,7 +553,23 @@
             startBtn.disabled = true;
         });
 
-        // Кнопка старта
+        // Если мы команда А, показываем кнопку сброса
+        if (team === 'A') {
+            document.getElementById('btnReset').style.display = 'inline-block';
+            document.getElementById('btnReset').addEventListener('click', resetDraft);
+        }
+
+        // Добавляем кнопку "Начать драфт" в статус-бар
+        const statusBar = document.querySelector('.status-bar');
+        const startBtn = document.createElement('button');
+        startBtn.className = 'btn';
+        startBtn.textContent = '▶ Начать драфт';
+        startBtn.disabled = true;
+        startBtn.id = 'btnStartDraft';
+        startBtn.style.marginLeft = 'auto';
+        statusBar.appendChild(startBtn);
+        window.startBtn = startBtn; // чтобы использовать в других функциях
+
         startBtn.addEventListener('click', () => {
             if (state.phase === 'setup' && myTeam === 'A' && isConnected) {
                 startDraft();
@@ -666,7 +608,7 @@
             });
         });
 
-        // Обработчик для карт
+        // Обработчик кликов по картам (делегирование)
         mapGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.map-card');
             if (!card) return;
@@ -674,10 +616,54 @@
             if (!mapId) return;
             handleMapClick(mapId);
         });
+
+        // Инициализируем начальное состояние (рендерим)
+        renderAll();
     }
 
     // ============================================================
-    // 4. Вспомогательные функции (те же, но с roomRef)
+    // 3. Логика драфта (аналогична предыдущей, но с roomRef)
+    const MAPS_DATA = [
+        { id: 'dust2', name: 'Dust II', icon: '🏜️' },
+        { id: 'mirage', name: 'Mirage', icon: '🏗️' },
+        { id: 'inferno', name: 'Inferno', icon: '🏛️' },
+        { id: 'nuke', name: 'Nuke', icon: '🏭' },
+        { id: 'vertigo', name: 'Vertigo', icon: '🗻' },
+        { id: 'ancient', name: 'Ancient', icon: '🏺' },
+        { id: 'anubis', name: 'Anubis', icon: '🌊' },
+    ];
+
+    const state = {
+        teamA: 'Team A',
+        teamB: 'Team B',
+        startingTeam: null,
+        currentTurn: null,
+        phase: 'setup',
+        maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
+        picked: [],
+        banned: [],
+        history: [],
+        banOrder: 0,
+        pickOrder: 0,
+        isLocked: false,
+        sidePickMapId: null,
+        sidePickWinner: null,
+        sidePickChoice: null,
+    };
+
+    // DOM refs для драфта
+    const $ = id => document.getElementById(id);
+    const mapGrid = $('mapGrid');
+    const phaseBadge = $('phaseBadge');
+    const turnDisplay = $('turnDisplay');
+    const sidePickContainer = $('sidePickContainer');
+    const sideWinner = $('sideWinner');
+    const resultsDiv = $('results');
+    const resultGrid = $('resultGrid');
+    const historyLog = $('historyLog');
+
+    // ============================================================
+    // 4. Вспомогательные функции
     function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
     function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
     function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
@@ -713,7 +699,9 @@
         renderAll();
         if (state.phase === 'complete') resultsDiv.classList.add('visible');
         else resultsDiv.classList.remove('visible');
-        startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        if (window.startBtn) {
+            window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        }
     }
 
     function sendAction(actionPayload) {
@@ -771,7 +759,7 @@
     }
 
     // ============================================================
-    // 5. Отрисовка (те же функции)
+    // 5. Отрисовка
     function renderMaps() {
         mapGrid.innerHTML = '';
         state.maps.forEach((map) => {
@@ -956,7 +944,7 @@
     }
 
     // ============================================================
-    // 6. Логика драфта (та же)
+    // 6. Логика драфта
     function handleMapClick(mapId) {
         if (state.isLocked) return;
         if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
@@ -1100,13 +1088,13 @@
         resultsDiv.classList.remove('visible');
         sidePickContainer.classList.add('hidden');
         renderAll();
-        startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        if (window.startBtn) {
+            window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+        }
         sendAction({ action: 'reset' });
     }
 
-    // ============================================================
-    // 7. Инициализация (уже вызвано через initDraft)
-    console.log('🔫 CS2 Draft — лобби + ссылки, Firebase');
+    console.log('🔫 CS2 Draft — лобби + ссылки (исправленное вечное подключение)');
 </script>
 </body>
 </html>

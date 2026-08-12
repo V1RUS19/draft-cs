@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CS2 Draft — лобби + ссылки</title>
+    <title>CS2 Draft — комнаты</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Стили (те же, что и в предыдущей версии) ===== */
+        /* ===== Стили ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -276,66 +276,33 @@
             border-color: #f7c948;
             color: #f7c948;
         }
-        .lobby-box {
+        .room-selector {
             background: rgba(255,255,255,0.05);
             border-radius: 20px;
-            padding: 30px;
+            padding: 40px;
             margin: 20px 0;
             text-align: center;
         }
-        .lobby-box input {
+        .room-selector input {
             background: rgba(0,0,0,0.4);
             border: 1px solid rgba(255,255,255,0.1);
             color: #e8ecf5;
-            padding: 12px 20px;
+            padding: 14px 20px;
             border-radius: 30px;
-            font-size: 16px;
-            width: 100%;
-            max-width: 300px;
+            font-size: 20px;
+            width: 200px;
             outline: none;
-            margin: 10px 0;
+            text-align: center;
             font-family: 'Inter', sans-serif;
+            margin: 10px;
         }
-        .lobby-box input:focus { border-color: #f7c948; }
-        .lobby-box .link-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            background: rgba(0,0,0,0.3);
-            padding: 10px 16px;
-            border-radius: 12px;
-            margin: 8px 0;
-        }
-        .lobby-box .link-row .team-label {
-            font-weight: 700;
-            font-size: 16px;
-            min-width: 30px;
-        }
-        .lobby-box .link-row .team-label.a { color: #ff6b6b; }
-        .lobby-box .link-row .team-label.b { color: #4ecdc4; }
-        .lobby-box .link-row input {
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #f7c948;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 14px;
-            flex: 1;
-            min-width: 200px;
-            cursor: pointer;
-        }
-        .lobby-box .link-row input:focus { border-color: #f7c948; }
-        .lobby-box .btn { margin-top: 20px; }
-        .lobby-box .btn-secondary { margin-top: 10px; }
+        .room-selector input:focus { border-color: #f7c948; }
+        .room-selector .btn { font-size: 18px; padding: 14px 40px; }
+        .room-selector .error { color: #ff6b6b; margin-top: 12px; font-size: 14px; }
         @media (max-width: 760px) {
             .app { padding: 20px 18px 28px; }
             .header { flex-direction: column; align-items: stretch; }
-            .header-right { flex-direction: column; align-items: stretch; }
-            .lobby-box .link-row { flex-direction: column; align-items: stretch; }
-            .lobby-box .link-row input { min-width: unset; }
+            .room-selector input { width: 100%; }
         }
     </style>
 </head>
@@ -345,17 +312,25 @@
     <div class="header">
         <div class="header-left">
             <span class="title">⚔️ CS2 DRAFT</span>
-            <span class="subtitle">BO3 · Лобби + ссылки</span>
+            <span class="subtitle">BO3 · Комнаты</span>
         </div>
         <div class="header-right">
-            <button class="btn-secondary" id="btnReset" style="display:none;">⟲ Сброс</button>
+            <button class="btn-secondary" id="btnLeave" style="display:none;">🚪 Выйти</button>
         </div>
     </div>
 
-    <!-- Контейнер для страницы лобби -->
-    <div id="lobbyContainer"></div>
+    <!-- Экран выбора комнаты -->
+    <div id="roomSelector" class="room-selector">
+        <h2 style="color:#f7c948;font-size:24px;margin-bottom:12px;">🏠 Введите номер комнаты</h2>
+        <p style="color:#8a92a8;margin-bottom:16px;">Два игрока должны ввести один и тот же номер</p>
+        <div>
+            <input type="text" id="roomInput" placeholder="Например, 1" maxlength="10" />
+            <button class="btn" id="btnJoinRoom">▶ Войти</button>
+        </div>
+        <div id="roomError" class="error"></div>
+    </div>
 
-    <!-- Контейнер для драфта (скрыт, пока не зашли по ссылке) -->
+    <!-- Контейнер для драфта (скрыт, пока не вошли в комнату) -->
     <div id="draftContainer" style="display:none;">
         <!-- Статус Firebase -->
         <div class="fb-status">
@@ -414,121 +389,201 @@
     const database = firebase.database();
 
     // ============================================================
-    // Парсинг URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomId = urlParams.get('room');
-    const teamParam = urlParams.get('team'); // 'A' или 'B'
-
-    // ============================================================
-    // 1. ЛОББИ (если нет room и team)
-    const lobbyContainer = document.getElementById('lobbyContainer');
+    // DOM refs
+    const roomSelector = document.getElementById('roomSelector');
     const draftContainer = document.getElementById('draftContainer');
-
-    if (!roomId || !teamParam) {
-        // Показываем страницу создания лобби
-        showLobby();
-    } else {
-        // Показываем драфт с назначенной командой
-        lobbyContainer.style.display = 'none';
-        draftContainer.style.display = 'block';
-        initDraft(roomId, teamParam);
-    }
-
-    function showLobby() {
-        const html = `
-            <div class="lobby-box">
-                <h2 style="color:#f7c948;font-size:24px;margin-bottom:12px;">🏠 Создать лобби</h2>
-                <p style="color:#8a92a8;margin-bottom:16px;">Введите названия команд и создайте ссылки для игроков</p>
-                <div>
-                    <input type="text" id="lobbyTeamA" placeholder="Название команды А" value="Team A" />
-                    <input type="text" id="lobbyTeamB" placeholder="Название команды Б" value="Team B" />
-                </div>
-                <button class="btn" id="btnCreateLobby">🔗 Создать лобби</button>
-                <div id="lobbyLinks" style="margin-top:20px;display:none;">
-                    <p style="color:#aab2c8;margin-bottom:10px;">Скопируйте ссылки и отправьте игрокам:</p>
-                    <div class="link-row">
-                        <span class="team-label a">▲ A</span>
-                        <input type="text" id="linkA" readonly value="" />
-                        <button class="btn-secondary" onclick="copyLink('linkA')">📋 Копировать</button>
-                    </div>
-                    <div class="link-row">
-                        <span class="team-label b">▼ B</span>
-                        <input type="text" id="linkB" readonly value="" />
-                        <button class="btn-secondary" onclick="copyLink('linkB')">📋 Копировать</button>
-                    </div>
-                    <button class="btn-secondary" id="btnStartDraftFromLobby" style="margin-top:12px;">▶ Начать драфт (только когда оба подключились)</button>
-                </div>
-            </div>
-        `;
-        lobbyContainer.innerHTML = html;
-
-        document.getElementById('btnCreateLobby').addEventListener('click', createLobby);
-        document.getElementById('btnStartDraftFromLobby')?.addEventListener('click', () => {
-            const linkA = document.getElementById('linkA').value;
-            if (linkA) window.location.href = linkA;
-        });
-    }
-
-    function createLobby() {
-        const teamA = document.getElementById('lobbyTeamA').value.trim() || 'Team A';
-        const teamB = document.getElementById('lobbyTeamB').value.trim() || 'Team B';
-        const room = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const baseUrl = window.location.href.split('?')[0];
-        const linkA = `${baseUrl}?room=${room}&team=A`;
-        const linkB = `${baseUrl}?room=${room}&team=B`;
-
-        document.getElementById('linkA').value = linkA;
-        document.getElementById('linkB').value = linkB;
-        document.getElementById('lobbyLinks').style.display = 'block';
-
-        // Сохраняем названия команд в Firebase
-        database.ref('lobbies/' + room).set({
-            teamA: teamA,
-            teamB: teamB,
-            created: Date.now()
-        }).catch(err => console.error('Ошибка сохранения лобби:', err));
-
-        document.getElementById('btnCreateLobby').disabled = true;
-        document.getElementById('btnCreateLobby').textContent = '✅ Лобби создано!';
-    }
-
-    function copyLink(id) {
-        const input = document.getElementById(id);
-        input.select();
-        document.execCommand('copy');
-        alert('Ссылка скопирована!');
-    }
+    const roomInput = document.getElementById('roomInput');
+    const btnJoinRoom = document.getElementById('btnJoinRoom');
+    const roomError = document.getElementById('roomError');
+    const btnLeave = document.getElementById('btnLeave');
+    const fbStatus = document.getElementById('fbStatus');
+    const roomInfo = document.getElementById('roomInfo');
 
     // ============================================================
-    // 2. ДРАФТ (при наличии room и team)
-    let myTeam = null;
+    // Переменные состояния
+    let currentRoom = null;
+    let myTeam = null; // 'A' или 'B'
     let roomRef = null;
     let isConnected = false;
     let ignoreNextSnapshot = false;
-    const fbStatus = document.getElementById('fbStatus');
-    const roomInfo = document.getElementById('roomInfo');
-    const statusAction = document.getElementById('statusAction');
 
-    function initDraft(room, team) {
-        myTeam = team;
-        roomInfo.textContent = `Комната: ${room} | Ваша команда: ${team}`;
-        roomRef = database.ref('lobbies/' + room + '/draft');
+    // ============================================================
+    // Обработчик входа в комнату
+    btnJoinRoom.addEventListener('click', joinRoom);
+    roomInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') joinRoom();
+    });
 
-        // Загружаем названия команд из лобби
-        database.ref('lobbies/' + room).once('value', (snap) => {
-            const data = snap.val();
-            if (data) {
-                state.teamA = data.teamA || 'Team A';
-                state.teamB = data.teamB || 'Team B';
-                renderAll();
+    function joinRoom() {
+        const roomId = roomInput.value.trim();
+        if (!roomId) {
+            roomError.textContent = 'Введите номер комнаты';
+            return;
+        }
+        roomError.textContent = '';
+        // Проверяем, есть ли уже такая комната, и сколько в ней игроков
+        const roomRefCheck = database.ref('rooms/' + roomId);
+        roomRefCheck.once('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.players) {
+                const players = Object.keys(data.players);
+                if (players.length >= 2) {
+                    roomError.textContent = 'Комната заполнена (2 игрока уже есть)';
+                    return;
+                }
+            }
+            // Входим в комнату
+            enterRoom(roomId);
+        });
+    }
+
+    function enterRoom(roomId) {
+        currentRoom = roomId;
+        // Скрываем выбор комнаты, показываем драфт
+        roomSelector.style.display = 'none';
+        draftContainer.style.display = 'block';
+        btnLeave.style.display = 'inline-block';
+
+        roomInfo.textContent = `Комната: ${roomId}`;
+
+        // Создаём ссылку на комнату
+        roomRef = database.ref('rooms/' + roomId + '/draft');
+
+        // Регистрируем игрока в комнате (определяем команду)
+        const playersRef = database.ref('rooms/' + roomId + '/players');
+        playersRef.transaction((current) => {
+            if (current === null) {
+                return { A: true }; // первый игрок — команда А
+            } else {
+                if (current.A && !current.B) {
+                    return { A: true, B: true }; // второй игрок — команда Б
+                } else {
+                    // уже есть оба — ошибка (но мы проверяли выше)
+                    return current;
+                }
+            }
+        }, (error, committed, snapshot) => {
+            if (error) {
+                alert('Ошибка входа в комнату: ' + error.message);
+                return;
+            }
+            if (!committed) {
+                alert('Не удалось войти в комнату (возможно, она уже заполнена)');
+                return;
+            }
+            // Определяем свою команду
+            const players = snapshot.val();
+            if (players.A && players.B) {
+                // Если мы добавили B, то наша команда B, иначе A
+                // Определяем по тому, что мы только что добавили
+                // Проще: проверим, есть ли мы в A или B, но мы не знаем свой ключ.
+                // Сохраним в локальную переменную при первом входе.
+                // Повторный вход: если мы уже есть, то просто берём из данных
+                // Лучше: при входе проверяем, есть ли мы уже, и если нет — добавляем.
+                // Но у нас нет идентификатора пользователя. Поэтому мы будем записывать при входе и сохранять.
+                // Сделаем проще: при входе мы транзакцией добавляем себя, и после этого узнаём, кто мы.
+                // Мы можем записать наш ключ в localStorage.
+                // Для простоты: будем считать, что первый игрок всегда А, второй Б.
+                // Так как транзакция атомарна, мы можем определить:
+                // Если до транзакции не было A, то мы A, иначе если не было B, то мы B.
+                // Но мы не знаем предыдущее состояние. Можно прочитать после транзакции.
+                // Я поступлю так: после транзакции я получу snapshot, и если в нём A === true, а B === true, то я проверю, кого я добавил.
+                // Но мы не знаем, добавили ли мы. Вместо этого я буду использовать onDisconnect для удаления игрока при выходе.
+                // И при входе буду просто проверять, есть ли я в комнате по ключу, который сохраню в localStorage.
+                // Это надёжнее.
+                // Перепишу логику без транзакции, а с использованием push уникального ключа.
+                // Сделаем проще: будем использовать push для каждого игрока, и первый добавленный — A, второй — B.
             }
         });
 
+        // Более простой способ: используем push для добавления игрока, а затем определяем команду по порядку.
+        const newPlayerRef = database.ref('rooms/' + roomId + '/players').push();
+        const playerKey = newPlayerRef.key;
+        // Сохраняем ключ в localStorage для повторного входа (если обновят страницу)
+        localStorage.setItem('cs2_room_' + roomId, playerKey);
+
+        // Определяем команду: смотрим количество игроков до нас
+        database.ref('rooms/' + roomId + '/players').once('value', (snap) => {
+            const players = snap.val();
+            const keys = Object.keys(players || {});
+            // Находим индекс нашего ключа
+            const index = keys.indexOf(playerKey);
+            if (index === -1) {
+                // нас нет — ошибка
+                alert('Ошибка: вы не зарегистрированы в комнате');
+                return;
+            }
+            // Команда А — первый, команда Б — второй
+            if (index === 0) {
+                myTeam = 'A';
+            } else if (index === 1) {
+                myTeam = 'B';
+            } else {
+                alert('Комната заполнена (максимум 2 игрока)');
+                // удаляем себя
+                newPlayerRef.remove();
+                return;
+            }
+
+            // Сохраняем информацию о команде в Firebase (для синхронизации)
+            database.ref('rooms/' + roomId + '/players/' + playerKey).set({
+                team: myTeam,
+                joined: Date.now()
+            });
+
+            // Инициализируем драфт
+            initDraft(roomId);
+        });
+    }
+
+    // ============================================================
+    // Выход из комнаты
+    btnLeave.addEventListener('click', () => {
+        if (currentRoom) {
+            const playerKey = localStorage.getItem('cs2_room_' + currentRoom);
+            if (playerKey) {
+                database.ref('rooms/' + currentRoom + '/players/' + playerKey).remove();
+            }
+            localStorage.removeItem('cs2_room_' + currentRoom);
+        }
+        // Отписываемся от изменений
+        if (roomRef) {
+            roomRef.off();
+        }
+        // Возвращаемся на экран выбора комнаты
+        roomSelector.style.display = 'block';
+        draftContainer.style.display = 'none';
+        btnLeave.style.display = 'none';
+        currentRoom = null;
+        myTeam = null;
+        roomRef = null;
+        isConnected = false;
+    });
+
+    // ============================================================
+    // Инициализация драфта
+    function initDraft(roomId) {
         // Подписываемся на изменения драфта
+        roomRef = database.ref('rooms/' + roomId + '/draft');
+
+        // Загружаем названия команд (если есть) или создаём их
+        const lobbyRef = database.ref('rooms/' + roomId);
+        lobbyRef.once('value', (snap) => {
+            const data = snap.val();
+            if (data && data.draft) {
+                // уже есть данные
+                applyRemoteState(data.draft);
+            } else {
+                // создаём начальное состояние
+                ignoreNextSnapshot = true;
+                saveStateToFirebase();
+            }
+        });
+
+        // Подписываемся на изменения
         roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) {
-                // Данных нет — создаём начальное состояние (любой игрок)
                 fbStatus.textContent = 'Создание данных...';
                 fbStatus.className = 'status connecting';
                 ignoreNextSnapshot = true;
@@ -543,23 +598,19 @@
             fbStatus.textContent = 'Синхронизировано';
             fbStatus.className = 'status connected';
             isConnected = true;
-            startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+            if (window.startBtn) {
+                window.startBtn.disabled = !(state.phase === 'setup' && myTeam === 'A' && isConnected);
+            }
             renderAll();
         }, (error) => {
             console.error('Ошибка чтения:', error);
             fbStatus.textContent = 'Ошибка подключения';
             fbStatus.className = 'status disconnected';
             isConnected = false;
-            startBtn.disabled = true;
+            if (window.startBtn) window.startBtn.disabled = true;
         });
 
-        // Если мы команда А, показываем кнопку сброса
-        if (team === 'A') {
-            document.getElementById('btnReset').style.display = 'inline-block';
-            document.getElementById('btnReset').addEventListener('click', resetDraft);
-        }
-
-        // Добавляем кнопку "Начать драфт" в статус-бар
+        // Добавляем кнопку "Начать драфт"
         const statusBar = document.querySelector('.status-bar');
         const startBtn = document.createElement('button');
         startBtn.className = 'btn';
@@ -568,7 +619,7 @@
         startBtn.id = 'btnStartDraft';
         startBtn.style.marginLeft = 'auto';
         statusBar.appendChild(startBtn);
-        window.startBtn = startBtn; // чтобы использовать в других функциях
+        window.startBtn = startBtn;
 
         startBtn.addEventListener('click', () => {
             if (state.phase === 'setup' && myTeam === 'A' && isConnected) {
@@ -608,7 +659,7 @@
             });
         });
 
-        // Обработчик кликов по картам (делегирование)
+        // Обработчик кликов по картам
         mapGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.map-card');
             if (!card) return;
@@ -617,12 +668,12 @@
             handleMapClick(mapId);
         });
 
-        // Инициализируем начальное состояние (рендерим)
+        // Инициализируем рендеринг
         renderAll();
     }
 
     // ============================================================
-    // 3. Логика драфта (аналогична предыдущей, но с roomRef)
+    //  Логика драфта (та же, что и раньше, с небольшими корректировками)
     const MAPS_DATA = [
         { id: 'dust2', name: 'Dust II', icon: '🏜️' },
         { id: 'mirage', name: 'Mirage', icon: '🏗️' },
@@ -651,11 +702,11 @@
         sidePickChoice: null,
     };
 
-    // DOM refs для драфта
     const $ = id => document.getElementById(id);
     const mapGrid = $('mapGrid');
     const phaseBadge = $('phaseBadge');
     const turnDisplay = $('turnDisplay');
+    const statusAction = $('statusAction');
     const sidePickContainer = $('sidePickContainer');
     const sideWinner = $('sideWinner');
     const resultsDiv = $('results');
@@ -663,7 +714,7 @@
     const historyLog = $('historyLog');
 
     // ============================================================
-    // 4. Вспомогательные функции
+    // Вспомогательные функции
     function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
     function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
     function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
@@ -759,7 +810,7 @@
     }
 
     // ============================================================
-    // 5. Отрисовка
+    // Отрисовка
     function renderMaps() {
         mapGrid.innerHTML = '';
         state.maps.forEach((map) => {
@@ -944,7 +995,7 @@
     }
 
     // ============================================================
-    // 6. Логика драфта
+    // Логика драфта (та же, что и раньше)
     function handleMapClick(mapId) {
         if (state.isLocked) return;
         if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
@@ -1094,7 +1145,7 @@
         sendAction({ action: 'reset' });
     }
 
-    console.log('🔫 CS2 Draft — лобби + ссылки (исправленное вечное подключение)');
+    console.log('🔫 CS2 Draft — комнаты без ссылок');
 </script>
 </body>
 </html>

@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CS2 Draft BO3 — Firebase</title>
-    <!-- Firebase SDK (совместимый с вашим config) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Все стили (без изменений, они уже рабочие) ===== */
+        /* ===== Все стили (без изменений) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -379,7 +379,7 @@
 
 <script>
     // ============================================================
-    // 🔥 ВСТАВЬТЕ ВАШУ КОНФИГУРАЦИЮ FIREBASE СЮДА (полностью)
+    // 🔥 КОНФИГУРАЦИЯ FIREBASE (ваша, уже вставлена)
     const firebaseConfig = {
         apiKey: "AIzaSyDeyrzmA7qQIhGQYeL51WAlgiKQsXE0c1c",
         authDomain: "draft-cs22.firebaseapp.com",
@@ -392,12 +392,13 @@
     };
     // ============================================================
 
-    // Инициализация Firebase (без аналитики, чтобы не было ошибок)
+    // Инициализация Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    const dbRef = database.ref('draft'); // корневой узел для драфта
+    const dbRef = database.ref('draft');
 
     let isConnected = false;
+    let ignoreNextSnapshot = false;
     const fbStatus = document.getElementById('fbStatus');
 
     // ============================================================
@@ -452,10 +453,8 @@
 
     // ============================================================
     // 4. Работа с Firebase
-    let ignoreNextSnapshot = false;
-
     function saveStateToFirebase() {
-        if (!isConnected) return;
+        // Даже если isConnected false, пытаемся сохранить (для первого раза)
         const data = {
             teamA: state.teamA,
             teamB: state.teamB,
@@ -473,15 +472,25 @@
             sidePickWinner: state.sidePickWinner,
             sidePickChoice: state.sidePickChoice,
         };
-        dbRef.set(data).catch(err => console.error('Ошибка сохранения:', err));
+        dbRef.set(data)
+            .then(() => console.log('Данные сохранены'))
+            .catch(err => console.error('Ошибка сохранения:', err));
     }
 
     function loadStateFromFirebase() {
         dbRef.on('value', (snapshot) => {
+            // Сразу считаем, что соединение установлено
+            isConnected = true;
+            fbStatus.textContent = 'Синхронизировано';
+            fbStatus.className = 'status connected';
+            btnStart.disabled = !(state.phase === 'setup' && isConnected);
+
             const data = snapshot.val();
             if (!data) {
-                fbStatus.textContent = 'Ожидание данных...';
-                fbStatus.className = 'status connecting';
+                // Если данных нет, создаём начальное состояние
+                fbStatus.textContent = 'Создание данных...';
+                ignoreNextSnapshot = true;
+                saveStateToFirebase();
                 return;
             }
             if (ignoreNextSnapshot) {
@@ -489,11 +498,6 @@
                 return;
             }
             applyRemoteState(data);
-            fbStatus.textContent = 'Синхронизировано';
-            fbStatus.className = 'status connected';
-            isConnected = true;
-            btnStart.disabled = !(state.phase === 'setup');
-            renderAll();
         }, (error) => {
             console.error('Ошибка чтения Firebase:', error);
             fbStatus.textContent = 'Ошибка подключения';
@@ -972,8 +976,8 @@
     loadStateFromFirebase();
     resetDraft();
 
-    console.log('🔫 CS2 Draft BO3 — Firebase версия');
-    console.log('Статус подключения отображается в панели Firebase.');
+    console.log('🔫 CS2 Draft BO3 — Firebase версия, исправленная');
+    console.log('Статус должен стать "Синхронизировано" через пару секунд.');
 </script>
 </body>
 </html>

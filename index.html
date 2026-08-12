@@ -4,12 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CS2 Draft — комнаты</title>
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Стили ===== */
+        /* ===== Стили (без изменений) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -405,7 +404,7 @@
     let myTeam = null; // 'A' или 'B'
     let roomRef = null;
     let isConnected = false;
-    let ignoreNextSnapshot = false;
+    let unsubscribe = null; // функция отписки
 
     // ============================================================
     // Обработчик входа в комнату
@@ -421,111 +420,46 @@
             return;
         }
         roomError.textContent = '';
-        // Проверяем, есть ли уже такая комната, и сколько в ней игроков
-        const roomRefCheck = database.ref('rooms/' + roomId);
-        roomRefCheck.once('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data && data.players) {
-                const players = Object.keys(data.players);
-                if (players.length >= 2) {
+        // Проверяем, есть ли уже два игрока в комнате
+        const playersRef = database.ref('rooms/' + roomId + '/players');
+        playersRef.once('value', (snapshot) => {
+            const players = snapshot.val();
+            if (players) {
+                const count = Object.keys(players).length;
+                if (count >= 2) {
                     roomError.textContent = 'Комната заполнена (2 игрока уже есть)';
                     return;
                 }
             }
-            // Входим в комнату
+            // Входим
             enterRoom(roomId);
         });
     }
 
     function enterRoom(roomId) {
         currentRoom = roomId;
-        // Скрываем выбор комнаты, показываем драфт
         roomSelector.style.display = 'none';
         draftContainer.style.display = 'block';
         btnLeave.style.display = 'inline-block';
-
         roomInfo.textContent = `Комната: ${roomId}`;
 
-        // Создаём ссылку на комнату
-        roomRef = database.ref('rooms/' + roomId + '/draft');
-
-        // Регистрируем игрока в комнате (определяем команду)
-        const playersRef = database.ref('rooms/' + roomId + '/players');
-        playersRef.transaction((current) => {
-            if (current === null) {
-                return { A: true }; // первый игрок — команда А
-            } else {
-                if (current.A && !current.B) {
-                    return { A: true, B: true }; // второй игрок — команда Б
-                } else {
-                    // уже есть оба — ошибка (но мы проверяли выше)
-                    return current;
-                }
-            }
-        }, (error, committed, snapshot) => {
-            if (error) {
-                alert('Ошибка входа в комнату: ' + error.message);
-                return;
-            }
-            if (!committed) {
-                alert('Не удалось войти в комнату (возможно, она уже заполнена)');
-                return;
-            }
-            // Определяем свою команду
-            const players = snapshot.val();
-            if (players.A && players.B) {
-                // Если мы добавили B, то наша команда B, иначе A
-                // Определяем по тому, что мы только что добавили
-                // Проще: проверим, есть ли мы в A или B, но мы не знаем свой ключ.
-                // Сохраним в локальную переменную при первом входе.
-                // Повторный вход: если мы уже есть, то просто берём из данных
-                // Лучше: при входе проверяем, есть ли мы уже, и если нет — добавляем.
-                // Но у нас нет идентификатора пользователя. Поэтому мы будем записывать при входе и сохранять.
-                // Сделаем проще: при входе мы транзакцией добавляем себя, и после этого узнаём, кто мы.
-                // Мы можем записать наш ключ в localStorage.
-                // Для простоты: будем считать, что первый игрок всегда А, второй Б.
-                // Так как транзакция атомарна, мы можем определить:
-                // Если до транзакции не было A, то мы A, иначе если не было B, то мы B.
-                // Но мы не знаем предыдущее состояние. Можно прочитать после транзакции.
-                // Я поступлю так: после транзакции я получу snapshot, и если в нём A === true, а B === true, то я проверю, кого я добавил.
-                // Но мы не знаем, добавили ли мы. Вместо этого я буду использовать onDisconnect для удаления игрока при выходе.
-                // И при входе буду просто проверять, есть ли я в комнате по ключу, который сохраню в localStorage.
-                // Это надёжнее.
-                // Перепишу логику без транзакции, а с использованием push уникального ключа.
-                // Сделаем проще: будем использовать push для каждого игрока, и первый добавленный — A, второй — B.
-            }
-        });
-
-        // Более простой способ: используем push для добавления игрока, а затем определяем команду по порядку.
-        const newPlayerRef = database.ref('rooms/' + roomId + '/players').push();
-        const playerKey = newPlayerRef.key;
-        // Сохраняем ключ в localStorage для повторного входа (если обновят страницу)
+        // Регистрируем игрока
+        const playerKey = database.ref('rooms/' + roomId + '/players').push().key;
         localStorage.setItem('cs2_room_' + roomId, playerKey);
 
-        // Определяем команду: смотрим количество игроков до нас
-        database.ref('rooms/' + roomId + '/players').once('value', (snap) => {
+        // Определяем команду: первый — A, второй — B
+        const playersRef = database.ref('rooms/' + roomId + '/players');
+        playersRef.once('value', (snap) => {
             const players = snap.val();
             const keys = Object.keys(players || {});
-            // Находим индекс нашего ключа
             const index = keys.indexOf(playerKey);
             if (index === -1) {
-                // нас нет — ошибка
-                alert('Ошибка: вы не зарегистрированы в комнате');
+                alert('Ошибка регистрации');
                 return;
             }
-            // Команда А — первый, команда Б — второй
-            if (index === 0) {
-                myTeam = 'A';
-            } else if (index === 1) {
-                myTeam = 'B';
-            } else {
-                alert('Комната заполнена (максимум 2 игрока)');
-                // удаляем себя
-                newPlayerRef.remove();
-                return;
-            }
+            myTeam = (index === 0) ? 'A' : 'B';
 
-            // Сохраняем информацию о команде в Firebase (для синхронизации)
+            // Сохраняем команду
             database.ref('rooms/' + roomId + '/players/' + playerKey).set({
                 team: myTeam,
                 joined: Date.now()
@@ -537,63 +471,50 @@
     }
 
     // ============================================================
-    // Выход из комнаты
-    btnLeave.addEventListener('click', () => {
-        if (currentRoom) {
-            const playerKey = localStorage.getItem('cs2_room_' + currentRoom);
-            if (playerKey) {
-                database.ref('rooms/' + currentRoom + '/players/' + playerKey).remove();
-            }
-            localStorage.removeItem('cs2_room_' + currentRoom);
-        }
-        // Отписываемся от изменений
-        if (roomRef) {
-            roomRef.off();
-        }
-        // Возвращаемся на экран выбора комнаты
-        roomSelector.style.display = 'block';
-        draftContainer.style.display = 'none';
-        btnLeave.style.display = 'none';
-        currentRoom = null;
-        myTeam = null;
-        roomRef = null;
-        isConnected = false;
-    });
-
-    // ============================================================
     // Инициализация драфта
     function initDraft(roomId) {
-        // Подписываемся на изменения драфта
+        // Создаём ссылку на данные драфта
         roomRef = database.ref('rooms/' + roomId + '/draft');
 
-        // Загружаем названия команд (если есть) или создаём их
-        const lobbyRef = database.ref('rooms/' + roomId);
-        lobbyRef.once('value', (snap) => {
-            const data = snap.val();
-            if (data && data.draft) {
-                // уже есть данные
-                applyRemoteState(data.draft);
-            } else {
-                // создаём начальное состояние
-                ignoreNextSnapshot = true;
-                saveStateToFirebase();
+        // Сначала проверяем, есть ли уже данные, если нет — создаём
+        roomRef.once('value', (snapshot) => {
+            if (!snapshot.exists()) {
+                // Создаём начальное состояние
+                const initialState = {
+                    teamA: 'Team A',
+                    teamB: 'Team B',
+                    startingTeam: null,
+                    currentTurn: null,
+                    phase: 'setup',
+                    maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
+                    picked: [],
+                    banned: [],
+                    history: [],
+                    banOrder: 0,
+                    pickOrder: 0,
+                    isLocked: false,
+                    sidePickMapId: null,
+                    sidePickWinner: null,
+                    sidePickChoice: null,
+                };
+                roomRef.set(initialState).then(() => {
+                    console.log('Данные драфта созданы');
+                }).catch(err => {
+                    console.error('Ошибка создания данных:', err);
+                });
             }
         });
 
         // Подписываемся на изменения
-        roomRef.on('value', (snapshot) => {
+        if (unsubscribe) unsubscribe();
+        unsubscribe = roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) {
-                fbStatus.textContent = 'Создание данных...';
+                fbStatus.textContent = 'Данные не найдены...';
                 fbStatus.className = 'status connecting';
-                ignoreNextSnapshot = true;
-                saveStateToFirebase();
                 return;
             }
-            if (ignoreNextSnapshot) {
-                ignoreNextSnapshot = false;
-                return;
-            }
+            // Применяем данные
             applyRemoteState(data);
             fbStatus.textContent = 'Синхронизировано';
             fbStatus.className = 'status connected';
@@ -603,23 +524,26 @@
             }
             renderAll();
         }, (error) => {
-            console.error('Ошибка чтения:', error);
+            console.error('Ошибка подписки:', error);
             fbStatus.textContent = 'Ошибка подключения';
             fbStatus.className = 'status disconnected';
             isConnected = false;
             if (window.startBtn) window.startBtn.disabled = true;
         });
 
-        // Добавляем кнопку "Начать драфт"
+        // Добавляем кнопку "Начать драфт" в статус-бар (если её нет)
         const statusBar = document.querySelector('.status-bar');
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn';
-        startBtn.textContent = '▶ Начать драфт';
-        startBtn.disabled = true;
-        startBtn.id = 'btnStartDraft';
-        startBtn.style.marginLeft = 'auto';
-        statusBar.appendChild(startBtn);
+        let startBtn = document.getElementById('btnStartDraft');
+        if (!startBtn) {
+            startBtn = document.createElement('button');
+            startBtn.className = 'btn';
+            startBtn.textContent = '▶ Начать драфт';
+            startBtn.id = 'btnStartDraft';
+            startBtn.style.marginLeft = 'auto';
+            statusBar.appendChild(startBtn);
+        }
         window.startBtn = startBtn;
+        startBtn.disabled = true;
 
         startBtn.addEventListener('click', () => {
             if (state.phase === 'setup' && myTeam === 'A' && isConnected) {
@@ -668,12 +592,42 @@
             handleMapClick(mapId);
         });
 
-        // Инициализируем рендеринг
+        // Инициализация рендера
         renderAll();
     }
 
     // ============================================================
-    //  Логика драфта (та же, что и раньше, с небольшими корректировками)
+    // Выход из комнаты
+    btnLeave.addEventListener('click', () => {
+        if (currentRoom) {
+            const playerKey = localStorage.getItem('cs2_room_' + currentRoom);
+            if (playerKey) {
+                database.ref('rooms/' + currentRoom + '/players/' + playerKey).remove();
+            }
+            localStorage.removeItem('cs2_room_' + currentRoom);
+        }
+        if (unsubscribe) {
+            unsubscribe();
+            unsubscribe = null;
+        }
+        if (roomRef) {
+            roomRef.off();
+        }
+        // Возврат на экран выбора комнаты
+        roomSelector.style.display = 'block';
+        draftContainer.style.display = 'none';
+        btnLeave.style.display = 'none';
+        currentRoom = null;
+        myTeam = null;
+        roomRef = null;
+        isConnected = false;
+        // Убираем кнопку старта
+        const startBtn = document.getElementById('btnStartDraft');
+        if (startBtn) startBtn.remove();
+    });
+
+    // ============================================================
+    // Логика драфта (та же, что и раньше)
     const MAPS_DATA = [
         { id: 'dust2', name: 'Dust II', icon: '🏜️' },
         { id: 'mirage', name: 'Mirage', icon: '🏗️' },
@@ -725,6 +679,7 @@
     function addHistory(text) { state.history.push({ text }); renderHistory(); }
 
     function saveStateToFirebase() {
+        if (!roomRef) return;
         const data = {
             teamA: state.teamA,
             teamB: state.teamB,
@@ -761,7 +716,6 @@
             return;
         }
         applyAction(actionPayload);
-        ignoreNextSnapshot = true;
         saveStateToFirebase();
     }
 
@@ -995,7 +949,7 @@
     }
 
     // ============================================================
-    // Логика драфта (та же, что и раньше)
+    // Логика драфта
     function handleMapClick(mapId) {
         if (state.isLocked) return;
         if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
@@ -1145,7 +1099,7 @@
         sendAction({ action: 'reset' });
     }
 
-    console.log('🔫 CS2 Draft — комнаты без ссылок');
+    console.log('🔫 CS2 Draft — упрощённые комнаты');
 </script>
 </body>
 </html>

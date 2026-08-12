@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CS2 Draft BO3 — многопользовательский</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        /* ── Все стили остаются такими же, как в предыдущей версии ── */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0b0d10;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-image: radial-gradient(ellipse at 50% 0%, #1a1f2a 0%, #0b0d10 70%);
+        }
+        .app {
+            max-width: 1100px;
+            width: 100%;
+            background: rgba(18, 22, 30, 0.92);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
+            padding: 32px 36px 40px;
+            border: 1px solid rgba(255, 180, 50, 0.12);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 180, 50, 0.05) inset;
+        }
+        .title {
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            font-size: 28px;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #f7c948, #f0a020);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+            text-shadow: 0 0 30px rgba(247, 201, 72, 0.15);
+        }
+        .subtitle {
+            color: #8a92a8;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+        .phase-badge {
+            display: inline-block;
+            background: rgba(247, 201, 72, 0.12);
+            color: #f7c948;
+            padding: 6px 18px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            border: 1px solid rgba(247, 201, 72, 0.15);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .header-left { display: flex; flex-direction: column; gap: 4px; }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .team-inputs {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .team-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 4px 12px 4px 16px;
+            border-radius: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: border-color 0.2s;
+        }
+        .team-input-group:focus-within { border-color: rgba(247, 201, 72, 0.3); }
+        .team-input-group .label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #8a92a8;
+            letter-spacing: 0.5px;
+        }
+        .team-input-group .label.a { color: #ff6b6b; }
+        .team-input-group .label.b { color: #4ecdc4; }
+        .team-input-group input {
+            background: transparent;
+            border: none;
+            color: #e8ecf5;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 4px;
+            width: 110px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .team-input-group input::placeholder { color: #4a5066; font-weight: 400; }
+        .btn {
+            background: linear-gradient(135deg, #f7c948, #e8a020);
+            border: none;
+            color: #0b0d10;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 10px 28px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.3px;
+            box-shadow: 0 4px 20px rgba(247, 201, 72, 0.2);
+            white-space: nowrap;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(247, 201, 72, 0.35);
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #8a92a8;
+            font-weight: 500;
+            font-size: 13px;
+            padding: 8px 18px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e8ecf5;
+        }
+        .btn-connect {
+            background: rgba(78, 205, 196, 0.15);
+            border: 1px solid #4ecdc4;
+            color: #4ecdc4;
+        }
+        .btn-connect:hover {
+            background: rgba(78, 205, 196, 0.25);
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 14px 22px;
+            margin-bottom: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .status-turn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            color: #e8ecf5;
+        }
+        .status-turn .team-indicator {
+            padding: 4px 14px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .team-indicator.a { background: rgba(255, 107, 107, 0.18); color: #ff6b6b; }
+        .team-indicator.b { background: rgba(78, 205, 196, 0.18); color: #4ecdc4; }
+        .team-indicator.neutral { background: rgba(247, 201, 72, 0.12); color: #f7c948; }
+        .status-action { color: #aab2c8; font-size: 14px; font-weight: 500; }
+        .status-action strong { color: #e8ecf5; font-weight: 600; }
+        .side-pick-widget {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 6px 18px 6px 22px;
+            border-radius: 40px;
+            border: 1px solid rgba(247, 201, 72, 0.12);
+        }
+        .side-pick-widget .label { font-size: 13px; font-weight: 500; color: #8a92a8; }
+        .side-pick-widget .winner { font-weight: 700; font-size: 14px; color: #f7c948; }
+        .side-pick-widget .btn-side {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #e8ecf5;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 5px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .side-pick-widget .btn-side:hover {
+            background: rgba(247, 201, 72, 0.12);
+            border-color: rgba(247, 201, 72, 0.2);
+        }
+        .side-pick-widget .btn-side.ct { color: #4ecdc4; }
+        .side-pick-widget .btn-side.t { color: #ff6b6b; }
+        .side-pick-widget .btn-side.chosen {
+            background: rgba(247, 201, 72, 0.15);
+            border-color: #f7c948;
+            color: #f7c948;
+        }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .map-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            padding: 16px 10px 14px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+            user-select: none;
+        }
+        .map-card:hover:not(.banned):not(.picked):not(.disabled) {
+            border-color: rgba(247, 201, 72, 0.25);
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        .map-card .map-icon { font-size: 34px; display: block; margin-bottom: 6px; filter: grayscale(0.2); }
+        .map-card .map-name { font-weight: 600; font-size: 14px; color: #e8ecf5; letter-spacing: 0.2px; }
+        .map-card .map-status {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 6px;
+            padding: 2px 12px;
+            border-radius: 30px;
+            display: inline-block;
+            letter-spacing: 0.3px;
+        }
+        .map-card .map-status.available { color: #5a6a8a; background: rgba(255, 255, 255, 0.03); }
+        .map-card .map-status.banned { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
+        .map-card .map-status.picked { color: #4ecdc4; background: rgba(78, 205, 196, 0.12); }
+        .map-card .map-status.remaining { color: #f7c948; background: rgba(247, 201, 72, 0.15); }
+        .map-card.banned { opacity: 0.4; cursor: not-allowed; border-color: rgba(255, 107, 107, 0.1); background: rgba(255, 107, 107, 0.04); }
+        .map-card.picked { opacity: 0.7; cursor: not-allowed; border-color: rgba(78, 205, 196, 0.15); background: rgba(78, 205, 196, 0.04); }
+        .map-card.disabled { cursor: not-allowed; opacity: 0.5; }
+        .map-card.clickable { cursor: pointer; }
+        .map-card .pick-order {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f7c948;
+            color: #0b0d10;
+            font-weight: 700;
+            font-size: 11px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(247, 201, 72, 0.3);
+        }
+        .map-card .pick-order.ct { background: #4ecdc4; }
+        .map-card .pick-order.t { background: #ff6b6b; }
+        .results {
+            margin-top: 16px;
+            padding: 22px 28px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            border: 1px solid rgba(247, 201, 72, 0.08);
+            display: none;
+        }
+        .results.visible { display: block; animation: fadeSlide 0.5s ease; }
+        @keyframes fadeSlide {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .results .result-title { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 20px; color: #f7c948; margin-bottom: 12px; letter-spacing: 1px; }
+        .results .result-grid { display: flex; flex-wrap: wrap; gap: 20px 40px; }
+        .results .result-item { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #e8ecf5; font-weight: 500; }
+        .results .result-item .num { font-weight: 700; color: #8a92a8; font-size: 13px; }
+        .results .result-item .map-name { font-weight: 600; color: #fff; }
+        .results .result-item .side-label {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 12px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #8a92a8;
+        }
+        .results .result-item .side-label.ct { background: rgba(78, 205, 196, 0.12); color: #4ecdc4; }
+        .results .result-item .side-label.t { background: rgba(255, 107, 107, 0.12); color: #ff6b6b; }
+        .history {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            max-height: 80px;
+            overflow-y: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+        }
+        .history .entry { font-size: 13px; color: #6a728a; font-weight: 400; }
+        .history .entry strong { color: #aab2c8; font-weight: 500; }
+        .history .entry .hl-a { color: #ff6b6b; }
+        .history .entry .hl-b { color: #4ecdc4; }
+        .history .entry .hl-gold { color: #f7c948; }
+        .history::-webkit-scrollbar { width: 4px; }
+        .history::-webkit-scrollbar-track { background: transparent; }
+        .history::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 4px; }
+        .hidden { display: none !important; }
+        .text-center { text-align: center; }
+        .mt-8 { margin-top: 8px; }
+        .flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .peer-section {
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+            padding: 12px 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+        .peer-section .label { color: #8a92a8; font-size: 13px; font-weight: 500; }
+        .peer-section .id-box {
+            background: rgba(0,0,0,0.4);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #f7c948;
+            border: 1px solid rgba(247, 201, 72, 0.15);
+            min-width: 120px;
+        }
+        .peer-section input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #e8ecf5;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-family: monospace;
+            font-size: 14px;
+            outline: none;
+            width: 160px;
+        }
+        .peer-section input:focus { border-color: #f7c948; }
+        .peer-status { font-size: 13px; color: #4ecdc4; }
+        @media (max-width: 760px) {
+            .app { padding: 20px 18px 28px; border-radius: 20px; }
+            .header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .header-right { flex-direction: column; align-items: stretch; }
+            .team-inputs { flex-direction: column; align-items: stretch; }
+            .team-input-group { padding: 4px 12px; }
+            .team-input-group input { width: 100%; }
+            .btn { width: 100%; justify-content: center; }
+            .status-bar { flex-direction: column; align-items: stretch; padding: 14px 16px; }
+            .status-left { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .side-pick-widget { flex-wrap: wrap; padding: 10px 16px; justify-content: center; }
+            .map-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+            .map-card { padding: 12px 6px 10px; }
+            .map-card .map-icon { font-size: 28px; }
+            .map-card .map-name { font-size: 12px; }
+            .results .result-grid { flex-direction: column; gap: 10px; }
+            .title { font-size: 22px; }
+            .peer-section { flex-direction: column; align-items: stretch; }
+            .peer-section input { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app" id="app">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-left">
+                <span class="title">⚔️ CS2 DRAFT</span>
+                <span class="subtitle">BO3 · Multiplayer</span>
+            </div>
+            <div class="header-right">
+                <div class="team-inputs" id="teamInputs">
+                    <div class="team-input-group">
+                        <span class="label a">▲ A</span>
+                        <input type="text" id="teamAInput" placeholder="Команда А" value="Team A" />
+                    </div>
+                    <div class="team-input-group">
+                        <span class="label b">▼ B</span>
+                        <input type="text" id="teamBInput" placeholder="Команда Б" value="Team B" />
+                    </div>
+                    <button class="btn" id="btnStart">▶ Начать драфт</button>
+                </div>
+                <button class="btn-secondary" id="btnReset">⟲ Сброс</button>
+            </div>
+        </div>
+
+        <!-- Peer-to-Peer Connection -->
+        <div class="peer-section" id="peerSection">
+            <span class="label">🔗 Соединение:</span>
+            <span class="id-box" id="myPeerId">—</span>
+            <span class="peer-status" id="peerStatus">Не подключено</span>
+            <button class="btn-secondary" id="btnCreateRoom">➕ Создать комнату</button>
+            <input type="text" id="remotePeerInput" placeholder="Введите ID соперника" />
+            <button class="btn btn-connect" id="btnConnect">Подключиться</button>
+            <button class="btn-secondary" id="btnDisconnect" style="display:none;">Отключиться</button>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar" id="statusBar">
+            <div class="status-left">
+                <div class="status-turn" id="statusTurn">
+                    <span class="phase-badge" id="phaseBadge">⚡ Ожидание</span>
+                    <span id="turnDisplay" style="color:#6a728a;font-weight:400;">—</span>
+                </div>
+                <div class="status-action" id="statusAction">
+                    Введите названия команд и нажмите «Начать драфт»
+                </div>
+            </div>
+            <div id="sidePickContainer" class="side-pick-widget hidden">
+                <span class="label">🎯 Выбор стороны</span>
+                <span class="winner" id="sideWinner">—</span>
+                <button class="btn-side ct" data-side="CT">CT</button>
+                <button class="btn-side t" data-side="T">T</button>
+            </div>
+        </div>
+
+        <!-- MAP GRID -->
+        <div class="map-grid" id="mapGrid"></div>
+
+        <!-- RESULTS -->
+        <div class="results" id="results">
+            <div class="result-title">🏆 Результат драфта</div>
+            <div class="result-grid" id="resultGrid"></div>
+            <div class="history" id="historyLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  MAPS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const MAPS_DATA = [
+            { id: 'dust2', name: 'Dust II', icon: '🏜️' },
+            { id: 'mirage', name: 'Mirage', icon: '🏗️' },
+            { id: 'inferno', name: 'Inferno', icon: '🏛️' },
+            { id: 'nuke', name: 'Nuke', icon: '🏭' },
+            { id: 'vertigo', name: 'Vertigo', icon: '🗻' },
+            { id: 'ancient', name: 'Ancient', icon: '🏺' },
+            { id: 'anubis', name: 'Anubis', icon: '🌊' },
+        ];
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  STATE
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const state = {
+            teamA: 'Team A',
+            teamB: 'Team B',
+            startingTeam: null,
+            currentTurn: null,
+            phase: 'setup',
+            maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
+            picked: [],
+            banned: [],
+            history: [],
+            banOrder: 0,
+            pickOrder: 0,
+            isLocked: false,
+            sidePickMapId: null,
+            sidePickWinner: null,
+            sidePickChoice: null,
+        };
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  PEER CONNECTION
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        let peer = null;
+        let conn = null;
+        let myPeerId = null;
+        let isHost = false; // тот, кто создал комнату (хост) — он же инициирует начало драфта?
+
+        const peerStatusEl = document.getElementById('peerStatus');
+        const myPeerIdEl = document.getElementById('myPeerId');
+        const remotePeerInput = document.getElementById('remotePeerInput');
+        const btnCreateRoom = document.getElementById('btnCreateRoom');
+        const btnConnect = document.getElementById('btnConnect');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+
+        function updatePeerStatus(text, isConnected) {
+            peerStatusEl.textContent = text;
+            peerStatusEl.style.color = isConnected ? '#4ecdc4' : '#ff6b6b';
+        }
+
+        function initPeer() {
+            if (peer) return;
+            peer = new Peer(undefined, {
+                debug: 2,
+                // можно указать свой ключ, если нужен, но используем стандартный сервер
+            });
+            peer.on('open', id => {
+                myPeerId = id;
+                myPeerIdEl.textContent = id;
+                updatePeerStatus('Ожидание подключения...', false);
+                console.log('Peer ID:', id);
+            });
+            peer.on('connection', incomingConn => {
+                if (conn) {
+                    // если уже есть соединение, отклоняем новое
+                    incomingConn.close();
+                    return;
+                }
+                conn = incomingConn;
+                setupConnection();
+                updatePeerStatus('Подключено!', true);
+                btnDisconnect.style.display = 'inline-block';
+                // Хостом считается тот, к кому подключаются (т.е. создатель комнаты)
+                isHost = true;
+                console.log('Incoming connection, we are host');
+            });
+            peer.on('error', err => {
+                console.error('Peer error:', err);
+                updatePeerStatus('Ошибка: ' + err.message, false);
+            });
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                console.log('Data connection open');
+                // Если мы подключаемся к хосту (мы не хост), то мы клиент
+                // isHost остаётся false, если мы инициировали подключение
+                if (!isHost) {
+                    // мы клиент, запрашиваем текущее состояние
+                    sendMessage({ type: 'sync_request' });
+                }
+                updatePeerStatus('Подключено!', true);
+                btnDisconnect.style.display = 'inline-block';
+            });
+            conn.on('data', data => {
+                handlePeerMessage(data);
+            });
+            conn.on('close', () => {
+                updatePeerStatus('Отключено', false);
+                conn = null;
+                btnDisconnect.style.display = 'none';
+                isHost = false;
+            });
+        }
+
+        function sendMessage(msg) {
+            if (conn && conn.open) {
+                conn.send(msg);
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  PEER MESSAGE HANDLER
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function handlePeerMessage(data) {
+            console.log('Received:', data);
+            const { type, payload } = data;
+
+            if (type === 'sync_request') {
+                // клиент запрашивает полное состояние
+                sendFullState();
+                return;
+            }
+
+            if (type === 'full_state') {
+                // принимаем полное состояние от хоста
+                applyFullState(payload);
+                return;
+            }
+
+            if (type === 'action') {
+                // действие от другого игрока
+                const { action, mapId, team, side, phase, ...rest } = payload;
+                // Применяем действие локально
+                applyAction(payload);
+                return;
+            }
+
+            if (type === 'start_draft') {
+                // хост сказал начать драфт
+                startDraft();
+                return;
+            }
+
+            if (type === 'reset') {
+                resetDraft();
+                return;
+            }
+        }
+
+        function sendFullState() {
+            const payload = {
+                teamA: state.teamA,
+                teamB: state.teamB,
+                startingTeam: state.startingTeam,
+                currentTurn: state.currentTurn,
+                phase: state.phase,
+                maps: state.maps,
+                picked: state.picked,
+                banned: state.banned,
+                history: state.history,
+                banOrder: state.banOrder,
+                pickOrder: state.pickOrder,
+                isLocked: state.isLocked,
+                sidePickMapId: state.sidePickMapId,
+                sidePickWinner: state.sidePickWinner,
+                sidePickChoice: state.sidePickChoice,
+            };
+            sendMessage({ type: 'full_state', payload });
+        }
+
+        function applyFullState(payload) {
+            Object.assign(state, payload);
+            // Перерисовываем всё
+            renderMaps();
+            renderStatus();
+            renderResults();
+            renderHistory();
+            // Обновляем поля ввода имён
+            teamAInput.value = state.teamA;
+            teamBInput.value = state.teamB;
+            // Если драфт завершён, показываем результаты
+            if (state.phase === 'complete') {
+                resultsDiv.classList.add('visible');
+            } else {
+                resultsDiv.classList.remove('visible');
+            }
+            // Блокируем кнопку старта, если драфт уже запущен
+            if (state.phase !== 'setup') {
+                btnStart.disabled = true;
+            } else {
+                btnStart.disabled = false;
+            }
+        }
+
+        function applyAction(payload) {
+            const { action, mapId, team, side, phase, pickOrder, banOrder, ...rest } = payload;
+            // Воспроизводим действие локально
+            if (action === 'ban') {
+                const map = getMapById(mapId);
+                if (map) map.status = 'banned';
+                state.banOrder = banOrder;
+                state.banned.push({ mapId, team, order: banOrder });
+                addHistory(
+                    `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`
+                    );
+            } else if (action === 'pick') {
+                const map = getMapById(mapId);
+                if (map) map.status = 'picked';
+                state.pickOrder = pickOrder;
+                state.picked.push({ mapId, team, order: pickOrder, side: side || null });
+                addHistory(
+                    `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`
+                    );
+                if (side) {
+                    // если side уже передан, значит это выбор стороны
+                    const pick = state.picked.find(p => p.mapId === mapId);
+                    if (pick) pick.side = side;
+                    addHistory(
+                        `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${map.name}`
+                        );
+                }
+            } else if (action === 'side_pick') {
+                state.sidePickWinner = payload.sidePickWinner;
+                state.sidePickChoice = payload.sidePickChoice;
+                const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
+                if (pick) pick.side = state.sidePickChoice;
+                addHistory(
+                    `<span class="hl-${getTeamClass(state.sidePickWinner)}">${getTeamName(state.sidePickWinner)}</span> выбрала сторону <strong>${state.sidePickChoice}</strong>`
+                    );
+            } else if (action === 'phase_change') {
+                state.phase = phase;
+                state.currentTurn = payload.currentTurn || null;
+                state.startingTeam = payload.startingTeam || state.startingTeam;
+                state.isLocked = false;
+                if (state.phase === 'complete') {
+                    const avail = getAvailableMaps();
+                    if (avail.length === 1) avail[0].status = 'remaining';
+                    renderResults();
+                }
+            }
+
+            // Перерисовка
+            renderMaps();
+            renderStatus();
+            renderResults();
+            renderHistory();
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  LOCAL HELPERS (как и раньше)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
+        function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
+        function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
+        function getOpponent(team) { return team === 'A' ? 'B' : 'A'; }
+        function getAvailableMaps() { return state.maps.filter(m => m.status === 'available'); }
+        function getMapById(id) { return state.maps.find(m => m.id === id); }
+        function getPickedMap(order) { return state.picked.find(p => p.order === order); }
+        function getRemainingMap() { const avail = getAvailableMaps(); return avail.length === 1 ? avail[0] : null; }
+
+        function addHistory(text) {
+            state.history.push({ text });
+            renderHistory();
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  RENDER FUNCTIONS (без изменений)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function renderMaps() {
+            mapGrid.innerHTML = '';
+            state.maps.forEach((map) => {
+                const card = document.createElement('div');
+                card.className = 'map-card';
+                if (map.status === 'banned') card.classList.add('banned');
+                if (map.status === 'picked') card.classList.add('picked');
+                const isClickable = map.status === 'available' &&
+                    (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
+                        state.phase === 'pick1' || state.phase === 'pick2') &&
+                    !state.isLocked;
+                if (isClickable) card.classList.add('clickable');
+                else card.classList.add('disabled');
+
+                const icon = document.createElement('span');
+                icon.className = 'map-icon';
+                icon.textContent = map.icon;
+                card.appendChild(icon);
+
+                const name = document.createElement('div');
+                name.className = 'map-name';
+                name.textContent = map.name;
+                card.appendChild(name);
+
+                const status = document.createElement('span');
+                status.className = 'map-status ' + map.status;
+                const labels = { available: 'Доступна', banned: 'Забанена', picked: 'Выбрана', remaining: 'Осталась' };
+                status.textContent = labels[map.status] || map.status;
+                card.appendChild(status);
+
+                if (map.status === 'picked') {
+                    const pick = state.picked.find(p => p.mapId === map.id);
+                    if (pick) {
+                        const badge = document.createElement('span');
+                        badge.className = 'pick-order';
+                        if (pick.side === 'CT') badge.classList.add('ct');
+                        else if (pick.side === 'T') badge.classList.add('t');
+                        badge.textContent = pick.order;
+                        card.appendChild(badge);
+                    }
+                }
+
+                card.addEventListener('click', () => {
+                    if (map.status === 'available' && !state.isLocked &&
+                        (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
+                            state.phase === 'pick1' || state.phase === 'pick2')) {
+                        handleMapClick(map.id);
+                    }
+                });
+
+                mapGrid.appendChild(card);
+            });
+        }
+
+        function renderStatus() {
+            const phaseLabels = {
+                setup: '⚡ Ожидание',
+                start_announce: '🎲 Жеребьёвка',
+                ban1: '🚫 Бан #1',
+                ban2: '🚫 Бан #2',
+                pick1: '📌 Выбор 1-й карты',
+                side_pick1: '🎯 Сторона для 1-й карты',
+                ban3: '🚫 Бан #3',
+                ban4: '🚫 Бан #4',
+                pick2: '📌 Выбор 2-й карты',
+                side_pick2: '🎯 Сторона для 2-й карты',
+                complete: '🏆 Драфт завершён!',
+            };
+            phaseBadge.textContent = phaseLabels[state.phase] || state.phase;
+
+            if (state.phase === 'setup') {
+                turnDisplay.textContent = '—';
+                statusAction.textContent = 'Введите названия команд и нажмите «Начать драфт»';
+                sidePickContainer.classList.add('hidden');
+                return;
+            }
+
+            if (state.phase === 'start_announce') {
+                const starter = state.startingTeam;
+                turnDisplay.innerHTML =
+                    `<span class="team-indicator ${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`;
+                statusAction.textContent = 'Первая команда банит карту...';
+                sidePickContainer.classList.add('hidden');
+                return;
+            }
+
+            if (state.phase === 'complete') {
+                turnDisplay.textContent = '✅ Завершено';
+                statusAction.textContent = 'Драфт окончен. Смотрите результаты.';
+                sidePickContainer.classList.add('hidden');
+                return;
+            }
+
+            if (state.currentTurn) {
+                const team = state.currentTurn;
+                const name = getTeamName(team);
+                const actionMap = {
+                    ban1: 'банит карту',
+                    ban2: 'банит карту',
+                    pick1: 'выбирает 1-ю карту',
+                    ban3: 'банит карту',
+                    ban4: 'банит карту',
+                    pick2: 'выбирает 2-ю карту',
+                };
+                const action = actionMap[state.phase] || 'ходит';
+                turnDisplay.innerHTML =
+                    `<span class="team-indicator ${getTeamClass(team)}">${name}</span> ${action}`;
+                statusAction.textContent = `Нажмите на карту, чтобы ${action === 'банит карту' ? 'забанить' : 'выбрать'}.`;
+                sidePickContainer.classList.add('hidden');
+            } else if (state.phase === 'side_pick1' || state.phase === 'side_pick2') {
+                const team = state.sidePickWinner;
+                if (team) {
+                    turnDisplay.innerHTML =
+                        `<span class="team-indicator ${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону`;
+                    statusAction.textContent = `Выберите сторону (CT или T) для карты ${getMapById(state.sidePickMapId)?.name || ''}`;
+                }
+                sidePickContainer.classList.remove('hidden');
+                sideWinner.textContent = getTeamName(team);
+                sideWinner.style.color = getTeamColor(team);
+                document.querySelectorAll('.btn-side').forEach(btn => {
+                    btn.classList.remove('chosen');
+                    if (state.sidePickChoice && btn.dataset.side === state.sidePickChoice) {
+                        btn.classList.add('chosen');
+                    }
+                    btn.disabled = !!state.sidePickChoice || state.isLocked;
+                    btn.style.opacity = btn.disabled ? '0.4' : '1';
+                });
+            } else {
+                sidePickContainer.classList.add('hidden');
+            }
+        }
+
+        function renderResults() {
+            if (state.phase !== 'complete') {
+                resultsDiv.classList.remove('visible');
+                return;
+            }
+            resultsDiv.classList.add('visible');
+
+            const pick1 = getPickedMap(1);
+            const pick2 = getPickedMap(2);
+            const remaining = getRemainingMap();
+
+            let html = '';
+            if (pick1) {
+                const team = getTeamName(pick1.team);
+                const side = pick1.side || '—';
+                html += `
+                    <div class="result-item">
+                        <span class="num">#1</span>
+                        <span class="map-name">${pick1.mapId}</span>
+                        <span style="color:${getTeamColor(pick1.team)}">${team}</span>
+                        <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
+                    </div>
+                `;
+            }
+            if (pick2) {
+                const team = getTeamName(pick2.team);
+                const side = pick2.side || '—';
+                html += `
+                    <div class="result-item">
+                        <span class="num">#2</span>
+                        <span class="map-name">${pick2.mapId}</span>
+                        <span style="color:${getTeamColor(pick2.team)}">${team}</span>
+                        <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
+                    </div>
+                `;
+            }
+            if (remaining) {
+                html += `
+                    <div class="result-item">
+                        <span class="num">#3</span>
+                        <span class="map-name" style="color:#f7c948;font-weight:700;">${remaining.icon} ${remaining.name}</span>
+                        <span style="color:#8a92a8;">(осталась)</span>
+                    </div>
+                `;
+            }
+            resultGrid.innerHTML = html;
+            renderHistory();
+        }
+
+        function renderHistory() {
+            historyLog.innerHTML = '';
+            state.history.forEach(entry => {
+                const span = document.createElement('span');
+                span.className = 'entry';
+                span.innerHTML = entry.text;
+                historyLog.appendChild(span);
+            });
+            historyLog.scrollTop = historyLog.scrollHeight;
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  LOCAL GAME LOGIC (с отправкой сообщений)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function handleMapClick(mapId) {
+            if (state.isLocked) return;
+            if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
+            if (state.phase === 'side_pick1' || state.phase === 'side_pick2') return;
+
+            const map = getMapById(mapId);
+            if (!map || map.status !== 'available') return;
+
+            const team = state.currentTurn;
+            if (!team) return;
+
+            const phase = state.phase;
+
+            // Ban
+            if (phase === 'ban1' || phase === 'ban2' || phase === 'ban3' || phase === 'ban4') {
+                map.status = 'banned';
+                state.banOrder++;
+                state.banned.push({ mapId: map.id, team, order: state.banOrder });
+                addHistory(
+                    `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`
+                    );
+                // Отправить действие
+                sendMessage({
+                    type: 'action',
+                    payload: {
+                        action: 'ban',
+                        mapId: map.id,
+                        team,
+                        banOrder: state.banOrder,
+                    }
+                });
+                nextPhase();
+                return;
+            }
+
+            // Pick
+            if (phase === 'pick1' || phase === 'pick2') {
+                map.status = 'picked';
+                state.pickOrder++;
+                const pickNum = state.pickOrder;
+                state.picked.push({ mapId: map.id, team, order: pickNum, side: null });
+                addHistory(
+                    `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`
+                    );
+                state.sidePickMapId = map.id;
+                sendMessage({
+                    type: 'action',
+                    payload: {
+                        action: 'pick',
+                        mapId: map.id,
+                        team,
+                        pickOrder: pickNum,
+                        side: null,
+                    }
+                });
+                nextPhase();
+                return;
+            }
+        }
+
+        function nextPhase() {
+            const flow = {
+                start_announce: 'ban1',
+                ban1: 'ban2',
+                ban2: 'pick1',
+                pick1: 'side_pick1',
+                side_pick1: 'ban3',
+                ban3: 'ban4',
+                ban4: 'pick2',
+                pick2: 'side_pick2',
+                side_pick2: 'complete',
+            };
+
+            let next = flow[state.phase];
+
+            if (next === 'ban1') {
+                state.currentTurn = state.startingTeam;
+            } else if (next === 'ban2') {
+                state.currentTurn = getOpponent(state.startingTeam);
+            } else if (next === 'pick1') {
+                state.currentTurn = state.startingTeam;
+            } else if (next === 'side_pick1') {
+                state.currentTurn = null;
+                state.sidePickWinner = getOpponent(state.startingTeam);
+                state.sidePickChoice = null;
+                state.sidePickMapId = state.picked.find(p => p.order === 1)?.mapId || null;
+            } else if (next === 'ban3') {
+                state.currentTurn = getOpponent(state.startingTeam);
+            } else if (next === 'ban4') {
+                state.currentTurn = state.startingTeam;
+            } else if (next === 'pick2') {
+                state.currentTurn = getOpponent(state.startingTeam);
+            } else if (next === 'side_pick2') {
+                state.currentTurn = null;
+                state.sidePickWinner = state.startingTeam;
+                state.sidePickChoice = null;
+                state.sidePickMapId = state.picked.find(p => p.order === 2)?.mapId || null;
+            } else if (next === 'complete') {
+                state.currentTurn = null;
+                const avail = getAvailableMaps();
+                if (avail.length === 1) {
+                    avail[0].status = 'remaining';
+                    addHistory(`<span class="hl-gold">Осталась карта: ${avail[0].icon} ${avail[0].name}</span>`);
+                }
+            }
+
+            state.phase = next;
+            state.isLocked = false;
+
+            // Отправить сообщение о смене фазы
+            sendMessage({
+                type: 'action',
+                payload: {
+                    action: 'phase_change',
+                    phase: next,
+                    currentTurn: state.currentTurn,
+                    startingTeam: state.startingTeam,
+                }
+            });
+
+            if (next === 'side_pick1' || next === 'side_pick2') {
+                const team = state.sidePickWinner;
+                addHistory(
+                    `<span class="hl-gold">🎯 Выбор стороны:</span> <span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону для карты ${getMapById(state.sidePickMapId)?.name}`
+                    );
+            }
+
+            if (state.phase === 'complete') {
+                renderResults();
+            }
+
+            renderMaps();
+            renderStatus();
+            renderHistory();
+
+            if (getAvailableMaps().length === 0 && state.phase !== 'complete') {
+                state.isLocked = true;
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  SIDE PICK HANDLERS (с отправкой)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        document.querySelectorAll('.btn-side').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (state.phase !== 'side_pick1' && state.phase !== 'side_pick2') return;
+                if (state.sidePickChoice) return;
+                if (state.isLocked) return;
+                const side = btn.dataset.side;
+                const team = state.sidePickWinner;
+                if (!team) return;
+                state.sidePickChoice = side;
+                state.isLocked = true;
+
+                const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
+                if (pick) pick.side = side;
+
+                addHistory(
+                    `<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${getMapById(state.sidePickMapId)?.name}`
+                    );
+
+                // Отправить
+                sendMessage({
+                    type: 'action',
+                    payload: {
+                        action: 'side_pick',
+                        sidePickWinner: team,
+                        sidePickChoice: side,
+                        mapId: state.sidePickMapId,
+                    }
+                });
+
+                renderStatus();
+                setTimeout(() => {
+                    state.isLocked = false;
+                    nextPhase();
+                }, 400);
+            });
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  START DRAFT (с отправкой)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function startDraft() {
+            const nameA = teamAInput.value.trim() || 'Team A';
+            const nameB = teamBInput.value.trim() || 'Team B';
+            state.teamA = nameA;
+            state.teamB = nameB;
+
+            state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
+            state.picked = [];
+            state.banned = [];
+            state.history = [];
+            state.banOrder = 0;
+            state.pickOrder = 0;
+            state.isLocked = false;
+            state.sidePickWinner = null;
+            state.sidePickChoice = null;
+            state.sidePickMapId = null;
+
+            const starter = Math.random() < 0.5 ? 'A' : 'B';
+            state.startingTeam = starter;
+            state.phase = 'start_announce';
+            state.currentTurn = null;
+
+            addHistory(
+                `<span class="hl-gold">🎲 Жеребьёвка:</span> <span class="hl-${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`
+                );
+
+            // Отправить начало драфта
+            sendMessage({ type: 'start_draft' });
+
+            renderMaps();
+            renderStatus();
+            renderHistory();
+
+            setTimeout(() => {
+                state.phase = 'ban1';
+                state.currentTurn = state.startingTeam;
+                renderMaps();
+                renderStatus();
+                addHistory(`<span class="hl-${getTeamClass(state.startingTeam)}">${getTeamName(state.startingTeam)}</span> начинает бан`);
+                // Отправить смену фазы
+                sendMessage({
+                    type: 'action',
+                    payload: {
+                        action: 'phase_change',
+                        phase: 'ban1',
+                        currentTurn: state.currentTurn,
+                        startingTeam: state.startingTeam,
+                    }
+                });
+            }, 600);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  RESET
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function resetDraft() {
+            state.phase = 'setup';
+            state.startingTeam = null;
+            state.currentTurn = null;
+            state.sidePickWinner = null;
+            state.sidePickChoice = null;
+            state.sidePickMapId = null;
+            state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
+            state.picked = [];
+            state.banned = [];
+            state.history = [];
+            state.banOrder = 0;
+            state.pickOrder = 0;
+            state.isLocked = false;
+            resultsDiv.classList.remove('visible');
+            sidePickContainer.classList.add('hidden');
+            renderMaps();
+            renderStatus();
+            renderHistory();
+            renderResults();
+            btnStart.disabled = false;
+            // Отправить сброс
+            sendMessage({ type: 'reset' });
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  PEER UI EVENTS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        btnCreateRoom.addEventListener('click', () => {
+            if (!peer) initPeer();
+            // Ждём открытия peer
+            if (peer && peer.id) {
+                myPeerIdEl.textContent = peer.id;
+                updatePeerStatus('Ожидание подключения...', false);
+                // Готовимся принимать соединения (уже готово)
+            } else {
+                alert('Peer ещё не инициализирован, попробуйте через секунду');
+            }
+        });
+
+        btnConnect.addEventListener('click', () => {
+            const remoteId = remotePeerInput.value.trim();
+            if (!remoteId) {
+                alert('Введите ID соперника');
+                return;
+            }
+            if (!peer) initPeer();
+            // Подключаемся
+            if (peer) {
+                conn = peer.connect(remoteId, { reliable: true });
+                isHost = false;
+                setupConnection();
+                updatePeerStatus('Подключение...', false);
+            }
+        });
+
+        btnDisconnect.addEventListener('click', () => {
+            if (conn) {
+                conn.close();
+                conn = null;
+            }
+            updatePeerStatus('Отключено', false);
+            btnDisconnect.style.display = 'none';
+            isHost = false;
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  DOM EVENTS (кнопки старта и сброса)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const btnStart = document.getElementById('btnStart');
+        const btnReset = document.getElementById('btnReset');
+        const teamAInput = document.getElementById('teamAInput');
+        const teamBInput = document.getElementById('teamBInput');
+        const mapGrid = document.getElementById('mapGrid');
+        const phaseBadge = document.getElementById('phaseBadge');
+        const turnDisplay = document.getElementById('turnDisplay');
+        const statusAction = document.getElementById('statusAction');
+        const sidePickContainer = document.getElementById('sidePickContainer');
+        const sideWinner = document.getElementById('sideWinner');
+        const resultsDiv = document.getElementById('results');
+        const resultGrid = document.getElementById('resultGrid');
+        const historyLog = document.getElementById('historyLog');
+
+        btnStart.addEventListener('click', () => {
+            if (state.phase === 'setup') {
+                // Проверяем, что соединение установлено (или хотя бы инициировано)
+                if (!conn || !conn.open) {
+                    alert('Сначала установите P2P-соединение с соперником!');
+                    return;
+                }
+                startDraft();
+                btnStart.disabled = true;
+            }
+        });
+
+        btnReset.addEventListener('click', resetDraft);
+
+        [teamAInput, teamBInput].forEach(inp => {
+            inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && state.phase === 'setup') {
+                    btnStart.click();
+                }
+            });
+            inp.addEventListener('input', () => {
+                state.teamA = teamAInput.value.trim() || 'Team A';
+                state.teamB = teamBInput.value.trim() || 'Team B';
+            });
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  INIT
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        initPeer();
+        resetDraft();
+
+        console.log('🔫 CS2 Draft BO3 — Multiplayer ready');
+        console.log('Создайте комнату, поделитесь своим ID, соперник подключается. После соединения можно начинать драфт.');
+    </script>
+</body>
+</html>

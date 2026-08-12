@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CS2 Draft — SDP очистка (финал)</title>
+    <title>CS2 Draft BO3 — Firebase</title>
+    <!-- Firebase SDK (совместимый с вашим config) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-        /* ===== Стили (без изменений, как в предыдущих версиях) ===== */
+        /* ===== Все стили (без изменений, они уже рабочие) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0b0d10;
@@ -159,34 +162,22 @@
         .team-indicator.a { background: rgba(255, 107, 107, 0.18); color: #ff6b6b; }
         .team-indicator.b { background: rgba(78, 205, 196, 0.18); color: #4ecdc4; }
         .status-action { color: #aab2c8; font-size: 14px; font-weight: 500; }
-        .peer-section {
+        .fb-status {
             background: rgba(255,255,255,0.03);
             border-radius: 20px;
-            padding: 12px 20px;
+            padding: 8px 20px;
             margin-bottom: 16px;
             border: 1px solid rgba(255,255,255,0.05);
             display: flex;
-            flex-wrap: wrap;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
+            flex-wrap: wrap;
         }
-        .peer-section .label { color: #8a92a8; font-size: 13px; font-weight: 500; }
-        .peer-section textarea {
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #e8ecf5;
-            padding: 8px 12px;
-            border-radius: 12px;
-            font-family: monospace;
-            font-size: 12px;
-            outline: none;
-            width: 100%;
-            max-width: 500px;
-            min-height: 70px;
-            resize: vertical;
-        }
-        .peer-section textarea:focus { border-color: #f7c948; }
-        .peer-status { font-size: 13px; color: #f7c948; font-weight: 500; }
+        .fb-status .label { color: #8a92a8; font-size: 13px; font-weight: 500; }
+        .fb-status .status { font-size: 14px; font-weight: 600; }
+        .fb-status .status.connected { color: #4ecdc4; }
+        .fb-status .status.disconnected { color: #ff6b6b; }
+        .fb-status .status.connecting { color: #f7c948; }
         .map-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -321,912 +312,668 @@
             .header-right { flex-direction: column; align-items: stretch; }
             .team-inputs { flex-direction: column; align-items: stretch; }
             .btn { width: 100%; justify-content: center; }
-            .peer-section { flex-direction: column; align-items: stretch; }
-            .peer-section textarea { max-width: 100%; }
+            .fb-status { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
 <body>
 
-    <div class="app" id="app">
-        <!-- HEADER -->
-        <div class="header">
-            <div class="header-left">
-                <span class="title">⚔️ CS2 DRAFT</span>
-                <span class="subtitle">BO3 · SDP очистка (финал)</span>
-            </div>
-            <div class="header-right">
-                <div class="team-inputs">
-                    <div class="team-input-group">
-                        <span class="label a">▲ A</span>
-                        <input type="text" id="teamAInput" placeholder="Команда А" value="Team A" />
-                    </div>
-                    <div class="team-input-group">
-                        <span class="label b">▼ B</span>
-                        <input type="text" id="teamBInput" placeholder="Команда Б" value="Team B" />
-                    </div>
-                    <button class="btn" id="btnStart" disabled>▶ Начать драфт</button>
-                </div>
-                <button class="btn-secondary" id="btnReset">⟲ Сброс</button>
-            </div>
+<div class="app" id="app">
+    <div class="header">
+        <div class="header-left">
+            <span class="title">⚔️ CS2 DRAFT</span>
+            <span class="subtitle">BO3 · Firebase</span>
         </div>
-
-        <!-- Ручное P2P-соединение -->
-        <div class="peer-section" id="peerSection">
-            <span class="label">🔗 Соединение:</span>
-            <span class="peer-status" id="peerStatus">Создаём Offer...</span>
-            <textarea id="offerArea" placeholder="Offer будет создан автоматически..."></textarea>
-            <button class="btn-secondary" id="btnAnswer">📥 Ответить</button>
-            <button class="btn-secondary" id="btnApplyAnswer" style="display:none;">✅ Применить ответ</button>
-            <button class="btn-secondary" id="btnDisconnect" style="display:none;">Отключиться</button>
-            <button class="btn-secondary" id="btnRegenerateOffer">🔄 Создать новый Offer</button>
-        </div>
-
-        <!-- STATUS BAR -->
-        <div class="status-bar" id="statusBar">
-            <div class="status-left">
-                <div class="status-turn" id="statusTurn">
-                    <span class="phase-badge" id="phaseBadge">⚡ Ожидание</span>
-                    <span id="turnDisplay" style="color:#6a728a;font-weight:400;">—</span>
+        <div class="header-right">
+            <div class="team-inputs">
+                <div class="team-input-group">
+                    <span class="label a">▲ A</span>
+                    <input type="text" id="teamAInput" placeholder="Команда А" value="Team A" />
                 </div>
-                <div class="status-action" id="statusAction">
-                    Введите названия команд и нажмите «Начать драфт»
+                <div class="team-input-group">
+                    <span class="label b">▼ B</span>
+                    <input type="text" id="teamBInput" placeholder="Команда Б" value="Team B" />
                 </div>
+                <button class="btn" id="btnStart" disabled>▶ Начать драфт</button>
             </div>
-            <div id="sidePickContainer" class="side-pick-widget hidden">
-                <span class="label">🎯 Выбор стороны</span>
-                <span class="winner" id="sideWinner">—</span>
-                <button class="btn-side ct" data-side="CT">CT</button>
-                <button class="btn-side t" data-side="T">T</button>
-            </div>
-        </div>
-
-        <!-- MAP GRID -->
-        <div class="map-grid" id="mapGrid"></div>
-
-        <!-- RESULTS -->
-        <div class="results" id="results">
-            <div class="result-title">🏆 Результат драфта</div>
-            <div class="result-grid" id="resultGrid"></div>
-            <div class="history" id="historyLog"></div>
+            <button class="btn-secondary" id="btnReset">⟲ Сброс</button>
         </div>
     </div>
 
-    <script>
-        // --------------------------------------------------------------
-        // MAPS
-        const MAPS_DATA = [
-            { id: 'dust2', name: 'Dust II', icon: '🏜️' },
-            { id: 'mirage', name: 'Mirage', icon: '🏗️' },
-            { id: 'inferno', name: 'Inferno', icon: '🏛️' },
-            { id: 'nuke', name: 'Nuke', icon: '🏭' },
-            { id: 'vertigo', name: 'Vertigo', icon: '🗻' },
-            { id: 'ancient', name: 'Ancient', icon: '🏺' },
-            { id: 'anubis', name: 'Anubis', icon: '🌊' },
-        ];
+    <!-- Статус Firebase -->
+    <div class="fb-status">
+        <span class="label">🔗 Firebase:</span>
+        <span class="status" id="fbStatus">Подключение...</span>
+        <button class="btn-secondary" id="btnReconnect">🔄 Переподключиться</button>
+    </div>
 
-        // STATE
-        const state = {
-            teamA: 'Team A',
-            teamB: 'Team B',
-            startingTeam: null,
-            currentTurn: null,
-            phase: 'setup',
-            maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
-            picked: [],
-            banned: [],
-            history: [],
-            banOrder: 0,
-            pickOrder: 0,
-            isLocked: false,
-            sidePickMapId: null,
-            sidePickWinner: null,
-            sidePickChoice: null,
+    <!-- STATUS BAR -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-left">
+            <div class="status-turn" id="statusTurn">
+                <span class="phase-badge" id="phaseBadge">⚡ Ожидание</span>
+                <span id="turnDisplay" style="color:#6a728a;font-weight:400;">—</span>
+            </div>
+            <div class="status-action" id="statusAction">
+                Введите названия команд и нажмите «Начать драфт»
+            </div>
+        </div>
+        <div id="sidePickContainer" class="side-pick-widget hidden">
+            <span class="label">🎯 Выбор стороны</span>
+            <span class="winner" id="sideWinner">—</span>
+            <button class="btn-side ct" data-side="CT">CT</button>
+            <button class="btn-side t" data-side="T">T</button>
+        </div>
+    </div>
+
+    <!-- MAP GRID -->
+    <div class="map-grid" id="mapGrid"></div>
+
+    <!-- RESULTS -->
+    <div class="results" id="results">
+        <div class="result-title">🏆 Результат драфта</div>
+        <div class="result-grid" id="resultGrid"></div>
+        <div class="history" id="historyLog"></div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // 🔥 ВСТАВЬТЕ ВАШУ КОНФИГУРАЦИЮ FIREBASE СЮДА (полностью)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDeyrzmA7qQIhGQYeL51WAlgiKQsXE0c1c",
+        authDomain: "draft-cs22.firebaseapp.com",
+        databaseURL: "https://draft-cs22-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "draft-cs22",
+        storageBucket: "draft-cs22.firebasestorage.app",
+        messagingSenderId: "421775366894",
+        appId: "1:421775366894:web:a68c37c075540676cd31ff",
+        measurementId: "G-7RDLE4P9XS"
+    };
+    // ============================================================
+
+    // Инициализация Firebase (без аналитики, чтобы не было ошибок)
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const dbRef = database.ref('draft'); // корневой узел для драфта
+
+    let isConnected = false;
+    const fbStatus = document.getElementById('fbStatus');
+
+    // ============================================================
+    // 1. MAPS
+    const MAPS_DATA = [
+        { id: 'dust2', name: 'Dust II', icon: '🏜️' },
+        { id: 'mirage', name: 'Mirage', icon: '🏗️' },
+        { id: 'inferno', name: 'Inferno', icon: '🏛️' },
+        { id: 'nuke', name: 'Nuke', icon: '🏭' },
+        { id: 'vertigo', name: 'Vertigo', icon: '🗻' },
+        { id: 'ancient', name: 'Ancient', icon: '🏺' },
+        { id: 'anubis', name: 'Anubis', icon: '🌊' },
+    ];
+
+    // ============================================================
+    // 2. STATE
+    const state = {
+        teamA: 'Team A',
+        teamB: 'Team B',
+        startingTeam: null,
+        currentTurn: null,
+        phase: 'setup',
+        maps: MAPS_DATA.map(m => ({ ...m, status: 'available' })),
+        picked: [],
+        banned: [],
+        history: [],
+        banOrder: 0,
+        pickOrder: 0,
+        isLocked: false,
+        sidePickMapId: null,
+        sidePickWinner: null,
+        sidePickChoice: null,
+    };
+
+    // ============================================================
+    // 3. DOM refs
+    const $ = id => document.getElementById(id);
+    const teamAInput = $('teamAInput');
+    const teamBInput = $('teamBInput');
+    const btnStart = $('btnStart');
+    const btnReset = $('btnReset');
+    const mapGrid = $('mapGrid');
+    const phaseBadge = $('phaseBadge');
+    const turnDisplay = $('turnDisplay');
+    const statusAction = $('statusAction');
+    const sidePickContainer = $('sidePickContainer');
+    const sideWinner = $('sideWinner');
+    const resultsDiv = $('results');
+    const resultGrid = $('resultGrid');
+    const historyLog = $('historyLog');
+    const btnReconnect = $('btnReconnect');
+
+    // ============================================================
+    // 4. Работа с Firebase
+    let ignoreNextSnapshot = false;
+
+    function saveStateToFirebase() {
+        if (!isConnected) return;
+        const data = {
+            teamA: state.teamA,
+            teamB: state.teamB,
+            startingTeam: state.startingTeam,
+            currentTurn: state.currentTurn,
+            phase: state.phase,
+            maps: state.maps,
+            picked: state.picked,
+            banned: state.banned,
+            history: state.history,
+            banOrder: state.banOrder,
+            pickOrder: state.pickOrder,
+            isLocked: state.isLocked,
+            sidePickMapId: state.sidePickMapId,
+            sidePickWinner: state.sidePickWinner,
+            sidePickChoice: state.sidePickChoice,
+        };
+        dbRef.set(data).catch(err => console.error('Ошибка сохранения:', err));
+    }
+
+    function loadStateFromFirebase() {
+        dbRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) {
+                fbStatus.textContent = 'Ожидание данных...';
+                fbStatus.className = 'status connecting';
+                return;
+            }
+            if (ignoreNextSnapshot) {
+                ignoreNextSnapshot = false;
+                return;
+            }
+            applyRemoteState(data);
+            fbStatus.textContent = 'Синхронизировано';
+            fbStatus.className = 'status connected';
+            isConnected = true;
+            btnStart.disabled = !(state.phase === 'setup');
+            renderAll();
+        }, (error) => {
+            console.error('Ошибка чтения Firebase:', error);
+            fbStatus.textContent = 'Ошибка подключения';
+            fbStatus.className = 'status disconnected';
+            isConnected = false;
+            btnStart.disabled = true;
+        });
+    }
+
+    function applyRemoteState(data) {
+        Object.assign(state, data);
+        teamAInput.value = state.teamA;
+        teamBInput.value = state.teamB;
+        renderAll();
+        if (state.phase === 'complete') resultsDiv.classList.add('visible');
+        else resultsDiv.classList.remove('visible');
+        btnStart.disabled = !(state.phase === 'setup' && isConnected);
+    }
+
+    function sendAction(actionPayload) {
+        if (!isConnected) {
+            alert('Нет соединения с Firebase');
+            return;
+        }
+        applyAction(actionPayload);
+        ignoreNextSnapshot = true;
+        saveStateToFirebase();
+    }
+
+    // ============================================================
+    // 5. Вспомогательные функции
+    function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
+    function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
+    function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
+    function getOpponent(team) { return team === 'A' ? 'B' : 'A'; }
+    function getAvailableMaps() { return state.maps.filter(m => m.status === 'available'); }
+    function getMapById(id) { return state.maps.find(m => m.id === id); }
+    function getPickedMap(order) { return state.picked.find(p => p.order === order); }
+    function addHistory(text) { state.history.push({ text }); renderHistory(); }
+
+    // ============================================================
+    // 6. Отрисовка
+    function renderMaps() {
+        mapGrid.innerHTML = '';
+        state.maps.forEach((map) => {
+            const card = document.createElement('div');
+            card.className = 'map-card';
+            if (map.status === 'banned') card.classList.add('banned');
+            if (map.status === 'picked') card.classList.add('picked');
+            const isClickable = map.status === 'available' &&
+                (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
+                    state.phase === 'pick1' || state.phase === 'pick2') &&
+                !state.isLocked && isConnected;
+            if (isClickable) card.classList.add('clickable');
+            else card.classList.add('disabled');
+
+            const icon = document.createElement('span');
+            icon.className = 'map-icon';
+            icon.textContent = map.icon;
+            card.appendChild(icon);
+
+            const name = document.createElement('div');
+            name.className = 'map-name';
+            name.textContent = map.name;
+            card.appendChild(name);
+
+            const status = document.createElement('span');
+            status.className = 'map-status ' + map.status;
+            const labels = { available: 'Доступна', banned: 'Забанена', picked: 'Выбрана', remaining: 'Осталась' };
+            status.textContent = labels[map.status] || map.status;
+            card.appendChild(status);
+
+            if (map.status === 'picked') {
+                const pick = state.picked.find(p => p.mapId === map.id);
+                if (pick) {
+                    const badge = document.createElement('span');
+                    badge.className = 'pick-order';
+                    if (pick.side === 'CT') badge.classList.add('ct');
+                    else if (pick.side === 'T') badge.classList.add('t');
+                    badge.textContent = pick.order;
+                    card.appendChild(badge);
+                }
+            }
+
+            card.addEventListener('click', () => {
+                if (map.status === 'available' && !state.isLocked && isConnected &&
+                    (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
+                        state.phase === 'pick1' || state.phase === 'pick2')) {
+                    handleMapClick(map.id);
+                }
+            });
+
+            mapGrid.appendChild(card);
+        });
+    }
+
+    function renderStatus() {
+        const phaseLabels = {
+            setup: '⚡ Ожидание',
+            start_announce: '🎲 Жеребьёвка',
+            ban1: '🚫 Бан #1',
+            ban2: '🚫 Бан #2',
+            pick1: '📌 Выбор 1-й карты',
+            side_pick1: '🎯 Сторона для 1-й карты',
+            ban3: '🚫 Бан #3',
+            ban4: '🚫 Бан #4',
+            pick2: '📌 Выбор 2-й карты',
+            side_pick2: '🎯 Сторона для 2-й карты',
+            complete: '🏆 Драфт завершён!',
+        };
+        phaseBadge.textContent = phaseLabels[state.phase] || state.phase;
+
+        if (state.phase === 'setup') {
+            turnDisplay.textContent = '—';
+            statusAction.textContent = 'Введите названия команд и нажмите «Начать драфт»';
+            sidePickContainer.classList.add('hidden');
+            return;
+        }
+        if (state.phase === 'start_announce') {
+            const starter = state.startingTeam;
+            turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`;
+            statusAction.textContent = 'Первая команда банит карту...';
+            sidePickContainer.classList.add('hidden');
+            return;
+        }
+        if (state.phase === 'complete') {
+            turnDisplay.textContent = '✅ Завершено';
+            statusAction.textContent = 'Драфт окончен. Смотрите результаты.';
+            sidePickContainer.classList.add('hidden');
+            return;
+        }
+        if (state.currentTurn) {
+            const team = state.currentTurn;
+            const name = getTeamName(team);
+            const actionMap = {
+                ban1: 'банит карту',
+                ban2: 'банит карту',
+                pick1: 'выбирает 1-ю карту',
+                ban3: 'банит карту',
+                ban4: 'банит карту',
+                pick2: 'выбирает 2-ю карту',
+            };
+            const action = actionMap[state.phase] || 'ходит';
+            turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(team)}">${name}</span> ${action}`;
+            statusAction.textContent = `Нажмите на карту, чтобы ${action === 'банит карту' ? 'забанить' : 'выбрать'}.`;
+            sidePickContainer.classList.add('hidden');
+        } else if (state.phase === 'side_pick1' || state.phase === 'side_pick2') {
+            const team = state.sidePickWinner;
+            if (team) {
+                turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону`;
+                statusAction.textContent = `Выберите сторону (CT или T) для карты ${getMapById(state.sidePickMapId)?.name || ''}`;
+            }
+            sidePickContainer.classList.remove('hidden');
+            sideWinner.textContent = getTeamName(team);
+            sideWinner.style.color = '#f7c948';
+            document.querySelectorAll('.btn-side').forEach(btn => {
+                btn.classList.remove('chosen');
+                if (state.sidePickChoice && btn.dataset.side === state.sidePickChoice) {
+                    btn.classList.add('chosen');
+                }
+                btn.disabled = !!state.sidePickChoice || state.isLocked || !isConnected;
+                btn.style.opacity = btn.disabled ? '0.4' : '1';
+            });
+        } else {
+            sidePickContainer.classList.add('hidden');
+        }
+    }
+
+    function renderResults() {
+        if (state.phase !== 'complete') {
+            resultsDiv.classList.remove('visible');
+            return;
+        }
+        resultsDiv.classList.add('visible');
+        const pick1 = getPickedMap(1);
+        const pick2 = getPickedMap(2);
+        const remaining = getAvailableMaps()[0];
+        let html = '';
+        if (pick1) {
+            const team = getTeamName(pick1.team);
+            const side = pick1.side || '—';
+            html += `
+                <div class="result-item">
+                    <span class="num">#1</span>
+                    <span class="map-name">${pick1.mapId}</span>
+                    <span style="color:${getTeamColor(pick1.team)}">${team}</span>
+                    <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
+                </div>
+            `;
+        }
+        if (pick2) {
+            const team = getTeamName(pick2.team);
+            const side = pick2.side || '—';
+            html += `
+                <div class="result-item">
+                    <span class="num">#2</span>
+                    <span class="map-name">${pick2.mapId}</span>
+                    <span style="color:${getTeamColor(pick2.team)}">${team}</span>
+                    <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
+                </div>
+            `;
+        }
+        if (remaining) {
+            html += `
+                <div class="result-item">
+                    <span class="num">#3</span>
+                    <span class="map-name" style="color:#f7c948;font-weight:700;">${remaining.icon} ${remaining.name}</span>
+                    <span style="color:#8a92a8;">(осталась)</span>
+                </div>
+            `;
+        }
+        resultGrid.innerHTML = html;
+        renderHistory();
+    }
+
+    function renderHistory() {
+        historyLog.innerHTML = '';
+        state.history.forEach(entry => {
+            const span = document.createElement('span');
+            span.className = 'entry';
+            span.innerHTML = entry.text;
+            historyLog.appendChild(span);
+        });
+        historyLog.scrollTop = historyLog.scrollHeight;
+    }
+
+    function renderAll() {
+        renderMaps();
+        renderStatus();
+        renderResults();
+        renderHistory();
+    }
+
+    // ============================================================
+    // 7. Применение действий
+    function applyAction(payload) {
+        const { action, mapId, team, side, phase, pickOrder, banOrder, sidePickWinner, sidePickChoice, currentTurn, startingTeam } = payload;
+
+        if (action === 'ban') {
+            const map = getMapById(mapId);
+            if (map) map.status = 'banned';
+            state.banOrder = banOrder;
+            state.banned.push({ mapId, team, order: banOrder });
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
+        } else if (action === 'pick') {
+            const map = getMapById(mapId);
+            if (map) map.status = 'picked';
+            state.pickOrder = pickOrder;
+            state.picked.push({ mapId, team, order: pickOrder, side: side || null });
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`);
+            if (side) {
+                const pick = state.picked.find(p => p.mapId === mapId);
+                if (pick) pick.side = side;
+                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${map.name}`);
+            }
+        } else if (action === 'side_pick') {
+            state.sidePickWinner = sidePickWinner;
+            state.sidePickChoice = sidePickChoice;
+            const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
+            if (pick) pick.side = state.sidePickChoice;
+            addHistory(`<span class="hl-${getTeamClass(state.sidePickWinner)}">${getTeamName(state.sidePickWinner)}</span> выбрала сторону <strong>${state.sidePickChoice}</strong>`);
+        } else if (action === 'phase_change') {
+            state.phase = phase;
+            state.currentTurn = currentTurn || null;
+            state.startingTeam = startingTeam || state.startingTeam;
+            state.isLocked = false;
+            if (state.phase === 'complete') {
+                const avail = getAvailableMaps();
+                if (avail.length === 1) avail[0].status = 'remaining';
+                renderResults();
+            }
+        } else if (action === 'start_draft') {
+            startDraft();
+        } else if (action === 'reset') {
+            resetDraft();
+        }
+        renderAll();
+    }
+
+    // ============================================================
+    // 8. Логика драфта
+    function handleMapClick(mapId) {
+        if (state.isLocked) return;
+        if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
+        if (state.phase === 'side_pick1' || state.phase === 'side_pick2') return;
+        if (!isConnected) {
+            alert('Нет соединения с Firebase');
+            return;
+        }
+
+        const map = getMapById(mapId);
+        if (!map || map.status !== 'available') return;
+
+        const team = state.currentTurn;
+        if (!team) return;
+
+        const phase = state.phase;
+
+        if (phase === 'ban1' || phase === 'ban2' || phase === 'ban3' || phase === 'ban4') {
+            map.status = 'banned';
+            state.banOrder++;
+            state.banned.push({ mapId: map.id, team, order: state.banOrder });
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
+            sendAction({ action: 'ban', mapId: map.id, team, banOrder: state.banOrder });
+            nextPhase();
+            return;
+        }
+
+        if (phase === 'pick1' || phase === 'pick2') {
+            map.status = 'picked';
+            state.pickOrder++;
+            const pickNum = state.pickOrder;
+            state.picked.push({ mapId: map.id, team, order: pickNum, side: null });
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`);
+            state.sidePickMapId = map.id;
+            sendAction({ action: 'pick', mapId: map.id, team, pickOrder: pickNum, side: null });
+            nextPhase();
+            return;
+        }
+    }
+
+    function nextPhase() {
+        const flow = {
+            start_announce: 'ban1',
+            ban1: 'ban2',
+            ban2: 'pick1',
+            pick1: 'side_pick1',
+            side_pick1: 'ban3',
+            ban3: 'ban4',
+            ban4: 'pick2',
+            pick2: 'side_pick2',
+            side_pick2: 'complete',
         };
 
-        // DOM refs
-        const $ = id => document.getElementById(id);
-        const teamAInput = $('teamAInput');
-        const teamBInput = $('teamBInput');
-        const btnStart = $('btnStart');
-        const btnReset = $('btnReset');
-        const mapGrid = $('mapGrid');
-        const phaseBadge = $('phaseBadge');
-        const turnDisplay = $('turnDisplay');
-        const statusAction = $('statusAction');
-        const sidePickContainer = $('sidePickContainer');
-        const sideWinner = $('sideWinner');
-        const resultsDiv = $('results');
-        const resultGrid = $('resultGrid');
-        const historyLog = $('historyLog');
-        const peerStatus = $('peerStatus');
-        const offerArea = $('offerArea');
-        const btnAnswer = $('btnAnswer');
-        const btnApplyAnswer = $('btnApplyAnswer');
-        const btnDisconnect = $('btnDisconnect');
-        const btnRegenerateOffer = $('btnRegenerateOffer');
+        let next = flow[state.phase];
 
-        // --------------------------------------------------------------
-        // Функция агрессивной очистки SDP (удаляем все нестандартные a= строки)
-        function cleanSdp(sdp) {
-            if (!sdp) return '';
-            const lines = sdp.split('\n');
-            // Разрешённые атрибуты для a= строк
-            const allowed = [
-                'rtpmap', 'fmtp', 'sendrecv', 'recvonly', 'inactive',
-                'mid', 'group', 'msid', 'ssrc', 'candidate', 'ice-',
-                'fingerprint', 'setup', 'dtls'
-            ];
-            const filtered = lines.filter(line => {
-                const trimmed = line.trim();
-                if (!trimmed) return false; // удаляем пустые строки
-                if (trimmed.startsWith('a=')) {
-                    // Проверяем, содержит ли строка разрешённый атрибут
-                    for (let attr of allowed) {
-                        if (trimmed.includes(attr)) return true;
-                    }
-                    // Если не содержит — удаляем
-                    return false;
-                }
-                // Оставляем все остальные строки (v=, o=, s=, t=, m=, c=)
-                return true;
-            });
-            return filtered.join('\n');
-        }
-
-        // --------------------------------------------------------------
-        // WebRTC
-        let pc = null;
-        let dataChannel = null;
-        let isInitiator = false;
-
-        function createPeerConnection() {
-            if (pc) return;
-            const config = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            };
-            try {
-                pc = new RTCPeerConnection(config);
-            } catch (e) {
-                alert('Ваш браузер не поддерживает WebRTC');
-                return;
-            }
-
-            pc.onconnectionstatechange = () => {
-                if (pc.connectionState === 'connected') {
-                    peerStatus.textContent = '✅ Подключено!';
-                    peerStatus.style.color = '#4ecdc4';
-                    btnStart.disabled = false;
-                    btnDisconnect.style.display = 'inline-block';
-                    btnAnswer.disabled = true;
-                    btnApplyAnswer.style.display = 'none';
-                    btnRegenerateOffer.disabled = true;
-                }
-            };
-
-            try {
-                dataChannel = pc.createDataChannel('draft', { reliable: true });
-            } catch (e) {
-                alert('Ошибка создания канала данных');
-                return;
-            }
-
-            dataChannel.onopen = () => {
-                peerStatus.textContent = '✅ Подключено!';
-                peerStatus.style.color = '#4ecdc4';
-                btnStart.disabled = false;
-                btnDisconnect.style.display = 'inline-block';
-                btnAnswer.disabled = true;
-                btnApplyAnswer.style.display = 'none';
-                btnRegenerateOffer.disabled = true;
-                if (!isInitiator) {
-                    sendMessage({ type: 'sync_request' });
-                }
-            };
-
-            dataChannel.onmessage = event => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handlePeerMessage(data);
-                } catch (e) {}
-            };
-
-            pc.ondatachannel = event => {
-                dataChannel = event.channel;
-                dataChannel.onopen = () => {
-                    peerStatus.textContent = '✅ Подключено!';
-                    peerStatus.style.color = '#4ecdc4';
-                    btnStart.disabled = false;
-                    btnDisconnect.style.display = 'inline-block';
-                    btnAnswer.disabled = true;
-                    btnApplyAnswer.style.display = 'none';
-                    btnRegenerateOffer.disabled = true;
-                };
-                dataChannel.onmessage = event => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handlePeerMessage(data);
-                    } catch (e) {}
-                };
-            };
-        }
-
-        // Генерация Offer
-        async function generateOffer() {
-            if (pc) {
-                if (dataChannel) dataChannel.close();
-                if (pc) pc.close();
-                pc = null;
-                dataChannel = null;
-            }
-            isInitiator = true;
-            createPeerConnection();
-            if (!pc) return;
-            try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                await new Promise(r => setTimeout(r, 2000));
-                let sdp = pc.localDescription.sdp;
-                if (!sdp) {
-                    alert('SDP пустой');
-                    return;
-                }
-                sdp = cleanSdp(sdp);
-                offerArea.value = sdp;
-                peerStatus.textContent = '📤 Offer создан, скопируйте и отправьте сопернику';
-                peerStatus.style.color = '#f7c948';
-                btnAnswer.disabled = false;
-                btnRegenerateOffer.disabled = false;
-                btnApplyAnswer.style.display = 'none';
-            } catch (e) {
-                alert('Ошибка создания offer: ' + e.message);
+        if (next === 'ban1') state.currentTurn = state.startingTeam;
+        else if (next === 'ban2') state.currentTurn = getOpponent(state.startingTeam);
+        else if (next === 'pick1') state.currentTurn = state.startingTeam;
+        else if (next === 'side_pick1') {
+            state.currentTurn = null;
+            state.sidePickWinner = getOpponent(state.startingTeam);
+            state.sidePickChoice = null;
+            state.sidePickMapId = state.picked.find(p => p.order === 1)?.mapId || null;
+        } else if (next === 'ban3') state.currentTurn = getOpponent(state.startingTeam);
+        else if (next === 'ban4') state.currentTurn = state.startingTeam;
+        else if (next === 'pick2') state.currentTurn = getOpponent(state.startingTeam);
+        else if (next === 'side_pick2') {
+            state.currentTurn = null;
+            state.sidePickWinner = state.startingTeam;
+            state.sidePickChoice = null;
+            state.sidePickMapId = state.picked.find(p => p.order === 2)?.mapId || null;
+        } else if (next === 'complete') {
+            state.currentTurn = null;
+            const avail = getAvailableMaps();
+            if (avail.length === 1) {
+                avail[0].status = 'remaining';
+                addHistory(`<span class="hl-gold">Осталась карта: ${avail[0].icon} ${avail[0].name}</span>`);
             }
         }
 
-        // Автогенерация при загрузке
-        window.addEventListener('load', () => {
-            setTimeout(generateOffer, 1000);
-        });
+        state.phase = next;
+        state.isLocked = false;
 
-        // Перегенерация
-        btnRegenerateOffer.addEventListener('click', generateOffer);
+        sendAction({ action: 'phase_change', phase: next, currentTurn: state.currentTurn, startingTeam: state.startingTeam });
 
-        // Ответить
-        btnAnswer.addEventListener('click', async () => {
-            let sdp = offerArea.value.trim();
-            if (!sdp) {
-                alert('Вставьте Offer от соперника');
-                return;
-            }
-            sdp = cleanSdp(sdp);
-            offerArea.value = sdp;
-
-            if (isInitiator) {
-                // Инициатор применяет ответ
-                btnApplyAnswer.style.display = 'inline-block';
-                btnAnswer.disabled = true;
-                return;
-            }
-            // Не инициатор — создаём ответ
-            if (pc) {
-                if (dataChannel) dataChannel.close();
-                if (pc) pc.close();
-                pc = null;
-                dataChannel = null;
-            }
-            isInitiator = false;
-            createPeerConnection();
-            if (!pc) return;
-            try {
-                const offerDesc = new RTCSessionDescription({ type: 'offer', sdp });
-                await pc.setRemoteDescription(offerDesc);
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                await new Promise(r => setTimeout(r, 2000));
-                let answerSdp = pc.localDescription.sdp;
-                if (!answerSdp) {
-                    alert('SDP ответа пустой');
-                    return;
-                }
-                answerSdp = cleanSdp(answerSdp);
-                offerArea.value = answerSdp;
-                peerStatus.textContent = '📥 Ответ создан, отправьте сопернику';
-                peerStatus.style.color = '#f7c948';
-                btnAnswer.disabled = true;
-                btnRegenerateOffer.disabled = true;
-            } catch (e) {
-                alert('Ошибка создания ответа: ' + e.message);
-            }
-        });
-
-        // Применить ответ
-        btnApplyAnswer.addEventListener('click', async () => {
-            let sdp = offerArea.value.trim();
-            if (!sdp) {
-                alert('Вставьте ответ от соперника');
-                return;
-            }
-            sdp = cleanSdp(sdp);
-            offerArea.value = sdp;
-            if (!pc || !isInitiator) {
-                alert('Ошибка: только инициатор может применить ответ');
-                return;
-            }
-            try {
-                const answerDesc = new RTCSessionDescription({ type: 'answer', sdp });
-                await pc.setRemoteDescription(answerDesc);
-                peerStatus.textContent = '🔄 Соединение устанавливается...';
-                btnApplyAnswer.style.display = 'none';
-                btnAnswer.disabled = true;
-            } catch (e) {
-                alert('Ошибка применения ответа: ' + e.message);
-            }
-        });
-
-        // Отключиться
-        btnDisconnect.addEventListener('click', () => {
-            if (dataChannel) dataChannel.close();
-            if (pc) pc.close();
-            pc = null;
-            dataChannel = null;
-            peerStatus.textContent = 'Отключено';
-            peerStatus.style.color = '#ff6b6b';
-            btnDisconnect.style.display = 'none';
-            btnStart.disabled = true;
-            btnAnswer.disabled = false;
-            btnApplyAnswer.style.display = 'none';
-            btnRegenerateOffer.disabled = false;
-            isInitiator = false;
-            generateOffer();
-        });
-
-        // Функция отправки сообщений
-        function sendMessage(msg) {
-            if (dataChannel && dataChannel.readyState === 'open') {
-                dataChannel.send(JSON.stringify(msg));
-            }
+        if (next === 'side_pick1' || next === 'side_pick2') {
+            const team = state.sidePickWinner;
+            addHistory(`<span class="hl-gold">🎯 Выбор стороны:</span> <span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону для карты ${getMapById(state.sidePickMapId)?.name}`);
         }
 
-        // --------------------------------------------------------------
-        // Обработчики сообщений (синхронизация)
-        function handlePeerMessage(data) {
-            const { type, payload } = data;
-            if (type === 'sync_request') {
-                sendFullState();
-                return;
-            }
-            if (type === 'full_state') {
-                applyFullState(payload);
-                return;
-            }
-            if (type === 'action') {
-                applyAction(payload);
-                return;
-            }
-            if (type === 'start_draft') {
-                startDraft();
-                return;
-            }
-            if (type === 'reset') {
-                resetDraft();
-                return;
-            }
-        }
+        if (state.phase === 'complete') renderResults();
+        renderAll();
 
-        function sendFullState() {
-            sendMessage({
-                type: 'full_state',
-                payload: {
-                    teamA: state.teamA,
-                    teamB: state.teamB,
-                    startingTeam: state.startingTeam,
-                    currentTurn: state.currentTurn,
-                    phase: state.phase,
-                    maps: state.maps,
-                    picked: state.picked,
-                    banned: state.banned,
-                    history: state.history,
-                    banOrder: state.banOrder,
-                    pickOrder: state.pickOrder,
-                    isLocked: state.isLocked,
-                    sidePickMapId: state.sidePickMapId,
-                    sidePickWinner: state.sidePickWinner,
-                    sidePickChoice: state.sidePickChoice,
-                }
-            });
-        }
+        if (getAvailableMaps().length === 0 && state.phase !== 'complete') state.isLocked = true;
+    }
 
-        function applyFullState(payload) {
-            Object.assign(state, payload);
-            teamAInput.value = state.teamA;
-            teamBInput.value = state.teamB;
-            renderMaps();
-            renderStatus();
-            renderResults();
-            renderHistory();
-            if (state.phase === 'complete') resultsDiv.classList.add('visible');
-            else resultsDiv.classList.remove('visible');
-            btnStart.disabled = !(state.phase === 'setup' && dataChannel && dataChannel.readyState === 'open');
-        }
+    function startDraft() {
+        const nameA = teamAInput.value.trim() || 'Team A';
+        const nameB = teamBInput.value.trim() || 'Team B';
+        state.teamA = nameA;
+        state.teamB = nameB;
 
-        function applyAction(payload) {
-            const { action, mapId, team, side, phase, pickOrder, banOrder, sidePickWinner, sidePickChoice, currentTurn, startingTeam } = payload;
-            if (action === 'ban') {
-                const map = getMapById(mapId);
-                if (map) map.status = 'banned';
-                state.banOrder = banOrder;
-                state.banned.push({ mapId, team, order: banOrder });
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
-            } else if (action === 'pick') {
-                const map = getMapById(mapId);
-                if (map) map.status = 'picked';
-                state.pickOrder = pickOrder;
-                state.picked.push({ mapId, team, order: pickOrder, side: side || null });
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`);
-                if (side) {
-                    const pick = state.picked.find(p => p.mapId === mapId);
-                    if (pick) pick.side = side;
-                    addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${map.name}`);
-                }
-            } else if (action === 'side_pick') {
-                state.sidePickWinner = sidePickWinner;
-                state.sidePickChoice = sidePickChoice;
-                const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
-                if (pick) pick.side = state.sidePickChoice;
-                addHistory(`<span class="hl-${getTeamClass(state.sidePickWinner)}">${getTeamName(state.sidePickWinner)}</span> выбрала сторону <strong>${state.sidePickChoice}</strong>`);
-            } else if (action === 'phase_change') {
-                state.phase = phase;
-                state.currentTurn = currentTurn || null;
-                state.startingTeam = startingTeam || state.startingTeam;
-                state.isLocked = false;
-                if (state.phase === 'complete') {
-                    const avail = getAvailableMaps();
-                    if (avail.length === 1) avail[0].status = 'remaining';
-                    renderResults();
-                }
-            }
-            renderMaps();
-            renderStatus();
-            renderResults();
-            renderHistory();
-        }
+        state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
+        state.picked = [];
+        state.banned = [];
+        state.history = [];
+        state.banOrder = 0;
+        state.pickOrder = 0;
+        state.isLocked = false;
+        state.sidePickWinner = null;
+        state.sidePickChoice = null;
+        state.sidePickMapId = null;
 
-        // --------------------------------------------------------------
-        // Вспомогательные функции
-        function getTeamName(team) { return team === 'A' ? state.teamA : state.teamB; }
-        function getTeamClass(team) { return team === 'A' ? 'a' : 'b'; }
-        function getTeamColor(team) { return team === 'A' ? '#ff6b6b' : '#4ecdc4'; }
-        function getOpponent(team) { return team === 'A' ? 'B' : 'A'; }
-        function getAvailableMaps() { return state.maps.filter(m => m.status === 'available'); }
-        function getMapById(id) { return state.maps.find(m => m.id === id); }
-        function getPickedMap(order) { return state.picked.find(p => p.order === order); }
-        function addHistory(text) { state.history.push({ text }); renderHistory(); }
+        const starter = Math.random() < 0.5 ? 'A' : 'B';
+        state.startingTeam = starter;
+        state.phase = 'start_announce';
+        state.currentTurn = null;
 
-        // --------------------------------------------------------------
-        // Отрисовка
-        function renderMaps() {
-            mapGrid.innerHTML = '';
-            state.maps.forEach((map) => {
-                const card = document.createElement('div');
-                card.className = 'map-card';
-                if (map.status === 'banned') card.classList.add('banned');
-                if (map.status === 'picked') card.classList.add('picked');
-                const isClickable = map.status === 'available' &&
-                    (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
-                        state.phase === 'pick1' || state.phase === 'pick2') &&
-                    !state.isLocked;
-                if (isClickable) card.classList.add('clickable');
-                else card.classList.add('disabled');
+        addHistory(`<span class="hl-gold">🎲 Жеребьёвка:</span> <span class="hl-${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`);
+        sendAction({ action: 'start_draft' });
+        renderAll();
 
-                const icon = document.createElement('span');
-                icon.className = 'map-icon';
-                icon.textContent = map.icon;
-                card.appendChild(icon);
+        setTimeout(() => {
+            state.phase = 'ban1';
+            state.currentTurn = state.startingTeam;
+            renderAll();
+            addHistory(`<span class="hl-${getTeamClass(state.startingTeam)}">${getTeamName(state.startingTeam)}</span> начинает бан`);
+            sendAction({ action: 'phase_change', phase: 'ban1', currentTurn: state.currentTurn, startingTeam: state.startingTeam });
+        }, 600);
+    }
 
-                const name = document.createElement('div');
-                name.className = 'map-name';
-                name.textContent = map.name;
-                card.appendChild(name);
+    function resetDraft() {
+        state.phase = 'setup';
+        state.startingTeam = null;
+        state.currentTurn = null;
+        state.sidePickWinner = null;
+        state.sidePickChoice = null;
+        state.sidePickMapId = null;
+        state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
+        state.picked = [];
+        state.banned = [];
+        state.history = [];
+        state.banOrder = 0;
+        state.pickOrder = 0;
+        state.isLocked = false;
+        resultsDiv.classList.remove('visible');
+        sidePickContainer.classList.add('hidden');
+        renderAll();
+        btnStart.disabled = !(isConnected && state.phase === 'setup');
+        sendAction({ action: 'reset' });
+    }
 
-                const status = document.createElement('span');
-                status.className = 'map-status ' + map.status;
-                const labels = { available: 'Доступна', banned: 'Забанена', picked: 'Выбрана', remaining: 'Осталась' };
-                status.textContent = labels[map.status] || map.status;
-                card.appendChild(status);
-
-                if (map.status === 'picked') {
-                    const pick = state.picked.find(p => p.mapId === map.id);
-                    if (pick) {
-                        const badge = document.createElement('span');
-                        badge.className = 'pick-order';
-                        if (pick.side === 'CT') badge.classList.add('ct');
-                        else if (pick.side === 'T') badge.classList.add('t');
-                        badge.textContent = pick.order;
-                        card.appendChild(badge);
-                    }
-                }
-
-                card.addEventListener('click', () => {
-                    if (map.status === 'available' && !state.isLocked &&
-                        (state.phase === 'ban1' || state.phase === 'ban2' || state.phase === 'ban3' || state.phase === 'ban4' ||
-                            state.phase === 'pick1' || state.phase === 'pick2')) {
-                        handleMapClick(map.id);
-                    }
-                });
-
-                mapGrid.appendChild(card);
-            });
-        }
-
-        function renderStatus() {
-            const phaseLabels = {
-                setup: '⚡ Ожидание',
-                start_announce: '🎲 Жеребьёвка',
-                ban1: '🚫 Бан #1',
-                ban2: '🚫 Бан #2',
-                pick1: '📌 Выбор 1-й карты',
-                side_pick1: '🎯 Сторона для 1-й карты',
-                ban3: '🚫 Бан #3',
-                ban4: '🚫 Бан #4',
-                pick2: '📌 Выбор 2-й карты',
-                side_pick2: '🎯 Сторона для 2-й карты',
-                complete: '🏆 Драфт завершён!',
-            };
-            phaseBadge.textContent = phaseLabels[state.phase] || state.phase;
-
-            if (state.phase === 'setup') {
-                turnDisplay.textContent = '—';
-                statusAction.textContent = 'Введите названия команд и нажмите «Начать драфт»';
-                sidePickContainer.classList.add('hidden');
-                return;
-            }
-            if (state.phase === 'start_announce') {
-                const starter = state.startingTeam;
-                turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`;
-                statusAction.textContent = 'Первая команда банит карту...';
-                sidePickContainer.classList.add('hidden');
-                return;
-            }
-            if (state.phase === 'complete') {
-                turnDisplay.textContent = '✅ Завершено';
-                statusAction.textContent = 'Драфт окончен. Смотрите результаты.';
-                sidePickContainer.classList.add('hidden');
-                return;
-            }
-            if (state.currentTurn) {
-                const team = state.currentTurn;
-                const name = getTeamName(team);
-                const actionMap = {
-                    ban1: 'банит карту',
-                    ban2: 'банит карту',
-                    pick1: 'выбирает 1-ю карту',
-                    ban3: 'банит карту',
-                    ban4: 'банит карту',
-                    pick2: 'выбирает 2-ю карту',
-                };
-                const action = actionMap[state.phase] || 'ходит';
-                turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(team)}">${name}</span> ${action}`;
-                statusAction.textContent = `Нажмите на карту, чтобы ${action === 'банит карту' ? 'забанить' : 'выбрать'}.`;
-                sidePickContainer.classList.add('hidden');
-            } else if (state.phase === 'side_pick1' || state.phase === 'side_pick2') {
-                const team = state.sidePickWinner;
-                if (team) {
-                    turnDisplay.innerHTML = `<span class="team-indicator ${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону`;
-                    statusAction.textContent = `Выберите сторону (CT или T) для карты ${getMapById(state.sidePickMapId)?.name || ''}`;
-                }
-                sidePickContainer.classList.remove('hidden');
-                sideWinner.textContent = getTeamName(team);
-                sideWinner.style.color = '#f7c948';
-                document.querySelectorAll('.btn-side').forEach(btn => {
-                    btn.classList.remove('chosen');
-                    if (state.sidePickChoice && btn.dataset.side === state.sidePickChoice) {
-                        btn.classList.add('chosen');
-                    }
-                    btn.disabled = !!state.sidePickChoice || state.isLocked;
-                    btn.style.opacity = btn.disabled ? '0.4' : '1';
-                });
-            } else {
-                sidePickContainer.classList.add('hidden');
-            }
-        }
-
-        function renderResults() {
-            if (state.phase !== 'complete') {
-                resultsDiv.classList.remove('visible');
-                return;
-            }
-            resultsDiv.classList.add('visible');
-            const pick1 = getPickedMap(1);
-            const pick2 = getPickedMap(2);
-            const remaining = getAvailableMaps()[0];
-            let html = '';
-            if (pick1) {
-                const team = getTeamName(pick1.team);
-                const side = pick1.side || '—';
-                html += `
-                    <div class="result-item">
-                        <span class="num">#1</span>
-                        <span class="map-name">${pick1.mapId}</span>
-                        <span style="color:${getTeamColor(pick1.team)}">${team}</span>
-                        <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
-                    </div>
-                `;
-            }
-            if (pick2) {
-                const team = getTeamName(pick2.team);
-                const side = pick2.side || '—';
-                html += `
-                    <div class="result-item">
-                        <span class="num">#2</span>
-                        <span class="map-name">${pick2.mapId}</span>
-                        <span style="color:${getTeamColor(pick2.team)}">${team}</span>
-                        <span class="side-label ${side === 'CT' ? 'ct' : side === 'T' ? 't' : ''}">${side}</span>
-                    </div>
-                `;
-            }
-            if (remaining) {
-                html += `
-                    <div class="result-item">
-                        <span class="num">#3</span>
-                        <span class="map-name" style="color:#f7c948;font-weight:700;">${remaining.icon} ${remaining.name}</span>
-                        <span style="color:#8a92a8;">(осталась)</span>
-                    </div>
-                `;
-            }
-            resultGrid.innerHTML = html;
-            renderHistory();
-        }
-
-        function renderHistory() {
-            historyLog.innerHTML = '';
-            state.history.forEach(entry => {
-                const span = document.createElement('span');
-                span.className = 'entry';
-                span.innerHTML = entry.text;
-                historyLog.appendChild(span);
-            });
-            historyLog.scrollTop = historyLog.scrollHeight;
-        }
-
-        // --------------------------------------------------------------
-        // Логика драфта
-        function handleMapClick(mapId) {
+    // ============================================================
+    // 9. Обработчики UI
+    document.querySelectorAll('.btn-side').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (state.phase !== 'side_pick1' && state.phase !== 'side_pick2') return;
+            if (state.sidePickChoice) return;
             if (state.isLocked) return;
-            if (state.phase === 'setup' || state.phase === 'complete' || state.phase === 'start_announce') return;
-            if (state.phase === 'side_pick1' || state.phase === 'side_pick2') return;
-
-            const map = getMapById(mapId);
-            if (!map || map.status !== 'available') return;
-
-            const team = state.currentTurn;
+            if (!isConnected) {
+                alert('Нет соединения с Firebase');
+                return;
+            }
+            const side = btn.dataset.side;
+            const team = state.sidePickWinner;
             if (!team) return;
+            state.sidePickChoice = side;
+            state.isLocked = true;
 
-            const phase = state.phase;
+            const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
+            if (pick) pick.side = side;
 
-            if (phase === 'ban1' || phase === 'ban2' || phase === 'ban3' || phase === 'ban4') {
-                map.status = 'banned';
-                state.banOrder++;
-                state.banned.push({ mapId: map.id, team, order: state.banOrder });
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> забанила <strong>${map.icon} ${map.name}</strong>`);
-                sendMessage({
-                    type: 'action',
-                    payload: { action: 'ban', mapId: map.id, team, banOrder: state.banOrder }
-                });
-                nextPhase();
-                return;
-            }
-
-            if (phase === 'pick1' || phase === 'pick2') {
-                map.status = 'picked';
-                state.pickOrder++;
-                const pickNum = state.pickOrder;
-                state.picked.push({ mapId: map.id, team, order: pickNum, side: null });
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала <strong>${map.icon} ${map.name}</strong>`);
-                state.sidePickMapId = map.id;
-                sendMessage({
-                    type: 'action',
-                    payload: { action: 'pick', mapId: map.id, team, pickOrder: pickNum, side: null }
-                });
-                nextPhase();
-                return;
-            }
-        }
-
-        function nextPhase() {
-            const flow = {
-                start_announce: 'ban1',
-                ban1: 'ban2',
-                ban2: 'pick1',
-                pick1: 'side_pick1',
-                side_pick1: 'ban3',
-                ban3: 'ban4',
-                ban4: 'pick2',
-                pick2: 'side_pick2',
-                side_pick2: 'complete',
-            };
-
-            let next = flow[state.phase];
-
-            if (next === 'ban1') state.currentTurn = state.startingTeam;
-            else if (next === 'ban2') state.currentTurn = getOpponent(state.startingTeam);
-            else if (next === 'pick1') state.currentTurn = state.startingTeam;
-            else if (next === 'side_pick1') {
-                state.currentTurn = null;
-                state.sidePickWinner = getOpponent(state.startingTeam);
-                state.sidePickChoice = null;
-                state.sidePickMapId = state.picked.find(p => p.order === 1)?.mapId || null;
-            } else if (next === 'ban3') state.currentTurn = getOpponent(state.startingTeam);
-            else if (next === 'ban4') state.currentTurn = state.startingTeam;
-            else if (next === 'pick2') state.currentTurn = getOpponent(state.startingTeam);
-            else if (next === 'side_pick2') {
-                state.currentTurn = null;
-                state.sidePickWinner = state.startingTeam;
-                state.sidePickChoice = null;
-                state.sidePickMapId = state.picked.find(p => p.order === 2)?.mapId || null;
-            } else if (next === 'complete') {
-                state.currentTurn = null;
-                const avail = getAvailableMaps();
-                if (avail.length === 1) {
-                    avail[0].status = 'remaining';
-                    addHistory(`<span class="hl-gold">Осталась карта: ${avail[0].icon} ${avail[0].name}</span>`);
-                }
-            }
-
-            state.phase = next;
-            state.isLocked = false;
-
-            sendMessage({
-                type: 'action',
-                payload: {
-                    action: 'phase_change',
-                    phase: next,
-                    currentTurn: state.currentTurn,
-                    startingTeam: state.startingTeam,
-                }
-            });
-
-            if (next === 'side_pick1' || next === 'side_pick2') {
-                const team = state.sidePickWinner;
-                addHistory(`<span class="hl-gold">🎯 Выбор стороны:</span> <span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбирает сторону для карты ${getMapById(state.sidePickMapId)?.name}`);
-            }
-
-            if (state.phase === 'complete') renderResults();
-            renderMaps();
+            addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${getMapById(state.sidePickMapId)?.name}`);
+            sendAction({ action: 'side_pick', sidePickWinner: team, sidePickChoice: side, mapId: state.sidePickMapId });
             renderStatus();
-            renderHistory();
-
-            if (getAvailableMaps().length === 0 && state.phase !== 'complete') state.isLocked = true;
-        }
-
-        // --------------------------------------------------------------
-        // Выбор стороны
-        document.querySelectorAll('.btn-side').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (state.phase !== 'side_pick1' && state.phase !== 'side_pick2') return;
-                if (state.sidePickChoice) return;
-                if (state.isLocked) return;
-                const side = btn.dataset.side;
-                const team = state.sidePickWinner;
-                if (!team) return;
-                state.sidePickChoice = side;
-                state.isLocked = true;
-
-                const pick = state.picked.find(p => p.mapId === state.sidePickMapId);
-                if (pick) pick.side = side;
-
-                addHistory(`<span class="hl-${getTeamClass(team)}">${getTeamName(team)}</span> выбрала сторону <strong>${side}</strong> для карты ${getMapById(state.sidePickMapId)?.name}`);
-                sendMessage({
-                    type: 'action',
-                    payload: { action: 'side_pick', sidePickWinner: team, sidePickChoice: side, mapId: state.sidePickMapId }
-                });
-                renderStatus();
-                setTimeout(() => { state.isLocked = false; nextPhase(); }, 400);
-            });
+            setTimeout(() => { state.isLocked = false; nextPhase(); }, 400);
         });
+    });
 
-        // --------------------------------------------------------------
-        // Старт и сброс
-        function startDraft() {
-            const nameA = teamAInput.value.trim() || 'Team A';
-            const nameB = teamBInput.value.trim() || 'Team B';
-            state.teamA = nameA;
-            state.teamB = nameB;
-
-            state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
-            state.picked = [];
-            state.banned = [];
-            state.history = [];
-            state.banOrder = 0;
-            state.pickOrder = 0;
-            state.isLocked = false;
-            state.sidePickWinner = null;
-            state.sidePickChoice = null;
-            state.sidePickMapId = null;
-
-            const starter = Math.random() < 0.5 ? 'A' : 'B';
-            state.startingTeam = starter;
-            state.phase = 'start_announce';
-            state.currentTurn = null;
-
-            addHistory(`<span class="hl-gold">🎲 Жеребьёвка:</span> <span class="hl-${getTeamClass(starter)}">${getTeamName(starter)}</span> начинает драфт`);
-            sendMessage({ type: 'start_draft' });
-            renderMaps();
-            renderStatus();
-            renderHistory();
-
-            setTimeout(() => {
-                state.phase = 'ban1';
-                state.currentTurn = state.startingTeam;
-                renderMaps();
-                renderStatus();
-                addHistory(`<span class="hl-${getTeamClass(state.startingTeam)}">${getTeamName(state.startingTeam)}</span> начинает бан`);
-                sendMessage({
-                    type: 'action',
-                    payload: {
-                        action: 'phase_change',
-                        phase: 'ban1',
-                        currentTurn: state.currentTurn,
-                        startingTeam: state.startingTeam,
-                    }
-                });
-            }, 600);
+    btnStart.addEventListener('click', () => {
+        if (state.phase === 'setup' && isConnected) {
+            startDraft();
+            btnStart.disabled = true;
         }
+    });
 
-        function resetDraft() {
-            state.phase = 'setup';
-            state.startingTeam = null;
-            state.currentTurn = null;
-            state.sidePickWinner = null;
-            state.sidePickChoice = null;
-            state.sidePickMapId = null;
-            state.maps = MAPS_DATA.map(m => ({ ...m, status: 'available' }));
-            state.picked = [];
-            state.banned = [];
-            state.history = [];
-            state.banOrder = 0;
-            state.pickOrder = 0;
-            state.isLocked = false;
-            resultsDiv.classList.remove('visible');
-            sidePickContainer.classList.add('hidden');
-            renderMaps();
-            renderStatus();
-            renderHistory();
-            renderResults();
-            btnStart.disabled = !(dataChannel && dataChannel.readyState === 'open');
-            sendMessage({ type: 'reset' });
-        }
+    btnReset.addEventListener('click', resetDraft);
+    btnReconnect.addEventListener('click', () => location.reload());
 
-        // --------------------------------------------------------------
-        // Кнопки старт / сброс
-        btnStart.addEventListener('click', () => {
-            if (state.phase === 'setup') {
-                if (!dataChannel || dataChannel.readyState !== 'open') {
-                    alert('Сначала установите соединение!');
-                    return;
-                }
-                startDraft();
-                btnStart.disabled = true;
-            }
-        });
+    teamAInput.addEventListener('input', () => { state.teamA = teamAInput.value.trim() || 'Team A'; });
+    teamBInput.addEventListener('input', () => { state.teamB = teamBInput.value.trim() || 'Team B'; });
 
-        btnReset.addEventListener('click', resetDraft);
+    // ============================================================
+    // 10. Инициализация
+    loadStateFromFirebase();
+    resetDraft();
 
-        // Ввод имён
-        teamAInput.addEventListener('input', () => { state.teamA = teamAInput.value.trim() || 'Team A'; });
-        teamBInput.addEventListener('input', () => { state.teamB = teamBInput.value.trim() || 'Team B'; });
-
-        // --------------------------------------------------------------
-        // Инициализация
-        resetDraft();
-        peerStatus.textContent = 'Готов к ручному подключению';
-        console.log('🔫 CS2 Draft — финальная версия с агрессивной очисткой SDP');
-        console.log('Игрок А: скопируйте Offer и отправьте игроку Б.');
-        console.log('Игрок Б: вставьте Offer, нажмите "Ответить", скопируйте ответ и отправьте игроку А.');
-        console.log('Игрок А: вставьте ответ, нажмите "Применить ответ".');
-    </script>
-
+    console.log('🔫 CS2 Draft BO3 — Firebase версия');
+    console.log('Статус подключения отображается в панели Firebase.');
+</script>
 </body>
 </html>
